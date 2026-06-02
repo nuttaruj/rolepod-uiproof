@@ -7,6 +7,24 @@ release.
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-06-02
+
+### Changed
+
+- **Lean Claude Code plugin cache (packaging only — no npm code change)** — the
+  marketplace plugin `source` moved from `./` (repo root) to
+  `./plugins/rolepod-uiproof`, a clean subtree containing only the plugin
+  manifest, `.mcp.json`, and `skills/`. Claude Code copies the plugin source
+  into its per-version cache and runs `npm install` when it finds a
+  `package.json` there; pointing `source` at a `package.json`-free subtree drops
+  the per-version cache from ~195 MB (full `node_modules`, mostly devDeps the
+  npx-spawned runtime never uses) to well under 1 MB. The runtime is unchanged —
+  the MCP server still spawns via `npx -y @rolepod/uiproof@0.10.0`, so the npm
+  package is NOT republished and the spawn pins stay at `@0.10.0`. Only the
+  plugin **distribution** version bumps to `0.11.0` so Claude Code detects the
+  update and reinstalls the lean layout. Other CLIs (Cursor/Codex/Gemini) were
+  never affected — they npx-spawn from config and never cached the repo.
+
 ## [0.10.0] — 2026-06-01
 
 ### Changed

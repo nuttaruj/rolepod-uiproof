@@ -27,6 +27,7 @@ const SPAWN_CONFIGS = [
   "gemini-extension.json",
   ".claude-plugin/plugin.json",
   "plugins/rolepod-uiproof/.mcp.json",
+  "plugins/rolepod-uiproof/.claude-plugin/plugin.json",
 ];
 
 describe("spawn config version pin (distribution lockstep)", () => {
