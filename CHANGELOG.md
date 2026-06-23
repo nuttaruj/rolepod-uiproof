@@ -7,6 +7,32 @@ release.
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-06-23
+
+### Changed
+
+- **BREAKING: MCP server key renamed `ui` → `rolepod-uiproof`** (config only — no
+  npm code change). v0.10.0 had shortened the `mcpServers` key to `ui` to collapse
+  the doubled label segment, but a bare `ui` is unidentifiable in a client's MCP
+  server list — it reads as a generic "ui" with no hint of which plugin owns it,
+  sitting next to clearly-named entries like `rolepod-wplab`. This release restores
+  `rolepod-uiproof` as the key so the server self-identifies and groups with the
+  rest of the rolepod family. The tradeoff — a doubled segment in the fully
+  qualified tool name (`mcp__plugin_rolepod-uiproof_rolepod-uiproof__browser_open`)
+  and identity (`plugin:rolepod-uiproof:rolepod-uiproof`) — is accepted in exchange
+  for a legible server list. Standalone `.mcp.json` users get `mcp__rolepod-uiproof__*`.
+  Agents that referenced tools by the old `…_ui__*` names must update; permission
+  grants keyed on the old names reset. Renamed in all six configs that carry the key
+  (`.mcp.json`, `.cursor/mcp.json`, `gemini-extension.json`,
+  `.claude-plugin/plugin.json`, and the `plugins/rolepod-uiproof/` mirror of the two
+  MCP configs).
+- **Distribution versions aligned to `0.12.0` across all clients.** Unlike the
+  Claude-only `0.11.0` packaging fix, this key rename touches every client config, so
+  the Cursor/Codex/Gemini manifests (still at `0.10.0`) and the Claude manifests (at
+  `0.11.0`) are all bumped to `0.12.0`. The npm package is unchanged: `package.json`
+  stays `0.10.0`, the `npx` spawn pins stay `@rolepod/uiproof@0.10.0`, and the
+  `spawn_version_pin` lockstep test stays green — no republish required.
+
 ## [0.11.0] — 2026-06-02
 
 ### Changed

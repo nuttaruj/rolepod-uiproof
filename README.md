@@ -150,12 +150,12 @@ done
 
 **Step 2 — MCP server:**
 
-Open Antigravity Settings → Customizations → **Open MCP Config** (or edit `~/.gemini/config/mcp_config.json` directly). Add the `ui` entry to the `mcpServers` map:
+Open Antigravity Settings → Customizations → **Open MCP Config** (or edit `~/.gemini/config/mcp_config.json` directly). Add the `rolepod-uiproof` entry to the `mcpServers` map:
 
 ```json
 {
   "mcpServers": {
-    "ui": {
+    "rolepod-uiproof": {
       "command": "npx",
       "args": ["-y", "@rolepod/uiproof"]
     }
@@ -177,7 +177,7 @@ Use this when your tool reads a standard `mcpServers` config (most non-CLI MCP c
 ```json
 {
   "mcpServers": {
-    "ui": {
+    "rolepod-uiproof": {
       "command": "npx",
       "args": ["-y", "@rolepod/uiproof"]
     }
