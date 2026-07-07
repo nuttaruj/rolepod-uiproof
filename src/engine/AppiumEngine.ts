@@ -306,7 +306,7 @@ export class AppiumEngine implements Engine {
     } catch {
       throw new RolepodMcpError(
         "engine_error",
-        "Mobile support needs webdriverio (and a running Appium server). Run `npx rolepod-uiproof install:mobile` for the setup checklist.",
+        "Mobile support needs webdriverio (and a running Appium server). Run `npx @rolepod/uiproof install:mobile` for the setup checklist.",
       );
     }
   }

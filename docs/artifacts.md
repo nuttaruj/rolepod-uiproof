@@ -51,7 +51,7 @@ parent `rolepod`'s `~/.rolepod/`).
 Re-run a bundle deterministically with:
 
 ```bash
-npx rolepod-uiproof replay .rolepod-uiproof/artifacts/verify_…/replay.json
+npx @rolepod/uiproof replay .rolepod-uiproof/artifacts/verify_…/replay.json
 ```
 
 The CLI returns exit code `0` if `passed`, `1` otherwise, and prints

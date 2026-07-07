@@ -7,6 +7,40 @@ release.
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-07-07
+
+Edge-case hardening release. Reconciles the version split (npm package was
+`0.10.0` while plugin manifests read `0.12.0`) — every manifest, spawn pin,
+and `SERVER_VERSION` now reads `0.13.0`.
+
+### Fixed
+
+- **Security — path traversal**: `ArtifactStore.writeReport`/`writeBytes` now
+  reject any name that is absolute or escapes the run directory, and
+  `scaffold_e2e` reduces a user-supplied `filename` to a basename. Previously a
+  crafted filename could overwrite arbitrary files.
+- **Security/correctness — codegen**: the pytest+selenium generator escapes
+  f-string braces, control chars, and the docstring, so user text can no longer
+  turn the emitted file into invalid Python.
+- **Boot crash**: an unreadable `.rolepod/parent-active` marker (a directory, or
+  no read permission) now degrades to standalone instead of crashing the server
+  at boot.
+- **Evidence clobbering**: with-parent run directories now carry a short uuid
+  suffix, so two same-second same-skill runs no longer overwrite each other.
+- **Mode race**: parent mode is re-detected per run, so a marker written by the
+  parent's SessionStart hook after this server booted is honoured.
+- **doctor**: the Playwright Chromium check probes `chromium.executablePath()`
+  instead of guessing cache directories (fixes false OK / false FAIL across
+  platforms and bundled-browser mode).
+- **Distribution**: user-facing docs and in-code hints now use the scoped
+  `npx @rolepod/uiproof …`; the bare `npx rolepod-uiproof` 404s on npm.
+
+### Changed
+
+- Browsers now launch **headless by default**; opt into a visible browser with
+  `ROLEPOD_HEADED=1`. Display-less hosts (CI, servers, containers) work without
+  configuration.
+
 ## [0.12.0] — 2026-06-23
 
 ### Changed

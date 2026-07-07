@@ -31,7 +31,7 @@ export function runInstallMobile(): number {
   lines.push("     • `adb devices` confirms an emulator or device is reachable\n");
 
   lines.push("5. Verify:");
-  lines.push("     npx rolepod-uiproof doctor\n");
+  lines.push("     npx @rolepod/uiproof doctor\n");
 
   lines.push("Environment overrides (optional):");
   lines.push("     APPIUM_HOST       default: 127.0.0.1");

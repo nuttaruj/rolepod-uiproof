@@ -7,12 +7,12 @@ body:
     attributes:
       value: |
         Thanks for taking the time to file a bug. Before submitting, please confirm:
-        - You have run `npx rolepod-uiproof doctor` and resolved any `✗` failures locally.
+        - You have run `npx @rolepod/uiproof doctor` and resolved any `✗` failures locally.
   - type: input
     id: version
     attributes:
       label: rolepod-uiproof version
-      placeholder: "e.g. 0.3.0 (output of `npx rolepod-uiproof --version`)"
+      placeholder: "e.g. 0.3.0 (output of `npx @rolepod/uiproof --version`)"
     validations:
       required: true
   - type: dropdown
@@ -47,7 +47,7 @@ body:
     attributes:
       label: Reproduction steps
       description: |
-        Minimal steps to reproduce. A `replay.json` bundle pasted here is ideal — `npx rolepod-uiproof replay <bundle.json>` re-runs deterministically.
+        Minimal steps to reproduce. A `replay.json` bundle pasted here is ideal — `npx @rolepod/uiproof replay <bundle.json>` re-runs deterministically.
       render: shell
     validations:
       required: true
@@ -55,7 +55,7 @@ body:
     id: env
     attributes:
       label: Environment
-      description: OS, Node version, browser/simulator version, output of `npx rolepod-uiproof doctor`.
+      description: OS, Node version, browser/simulator version, output of `npx @rolepod/uiproof doctor`.
       render: text
     validations:
       required: true

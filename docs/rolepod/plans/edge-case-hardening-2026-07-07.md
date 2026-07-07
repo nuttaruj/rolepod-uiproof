@@ -94,22 +94,22 @@ Test infra already exists (vitest, 131 passing). No bootstrap needed. Offline-de
 ## PR3 — Distribution, naming, version reconcile
 
 ### Task 3.1 — Fix unscoped `npx rolepod-uiproof` → `@rolepod/uiproof`
-- [ ] `README.md:205,217` (and any runtime error string) instruct `npx rolepod-uiproof …` — an **unscoped** name that 404s on npm and is squattable. Replace all user-facing invocations with `npx @rolepod/uiproof@<version> …`. Grep the whole tree for the bare form and fix each: `grep -rn "npx rolepod-uiproof" . -g '!node_modules'`. Also fix any thrown message that suggests it (e.g. the mobile-install hint).
+- [x] `README.md:205,217` (and any runtime error string) instruct `npx rolepod-uiproof …` — an **unscoped** name that 404s on npm and is squattable. Replace all user-facing invocations with `npx @rolepod/uiproof@<version> …`. Grep the whole tree for the bare form and fix each: `grep -rn "npx rolepod-uiproof" . -g '!node_modules'`. Also fix any thrown message that suggests it (e.g. the mobile-install hint).
 - **Test:** `tests/lint/skills.test.ts` (extend) or new `tests/lint/npx_name.test.ts` — assert no tracked file (excluding node_modules/lock) contains `npx rolepod-uiproof` without the `@rolepod/` scope.
 - **Command:** `npx vitest run tests/lint/npx_name.test.ts`
 
 ### Task 3.2 — Pin the README manual-config snippets
-- [ ] `README.md:160,182` ship `["-y","@rolepod/uiproof"]` unpinned — the repo's own `tests/unit/spawn_version_pin.test.ts` bans unpinned specs in configs. Pin to `@rolepod/uiproof@0.13.0` to match the release.
+- [x] `README.md:160,182` ship `["-y","@rolepod/uiproof"]` unpinned — the repo's own `tests/unit/spawn_version_pin.test.ts` bans unpinned specs in configs. Pin to `@rolepod/uiproof@0.13.0` to match the release.
 - **Test:** extend `tests/unit/spawn_version_pin.test.ts` to also scan README fenced json blocks (or add README to its file list).
 - **Command:** `npx vitest run tests/unit/spawn_version_pin.test.ts`
 
 ### Task 3.3 — Reconcile version to 0.13.0 across every manifest + spawn pin
-- [ ] Split confirmed: `package.json:3` = 0.10.0; all 5 plugin manifests = 0.12.0; spawn pins = `@rolepod/uiproof@0.10.0`; git tags stop at v0.7.1 (0.10–0.12 never tagged/published past 0.10.0). Set **one** version 0.13.0 in: `package.json`, `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, `.cursor-plugin/plugin.json`, `.agents/*`, `gemini-extension.json`, `plugins/rolepod-uiproof/.claude-plugin/plugin.json`; update every `@rolepod/uiproof@…` spawn pin to `@0.13.0` (`.mcp.json` + all manifests); add `dist/schemas` version if emitted. Add CHANGELOG `[0.13.0]` entry summarising this hardening release.
+- [x] Split confirmed: `package.json:3` = 0.10.0; all 5 plugin manifests = 0.12.0; spawn pins = `@rolepod/uiproof@0.10.0`; git tags stop at v0.7.1 (0.10–0.12 never tagged/published past 0.10.0). Set **one** version 0.13.0 in: `package.json`, `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, `.cursor-plugin/plugin.json`, `.agents/*`, `gemini-extension.json`, `plugins/rolepod-uiproof/.claude-plugin/plugin.json`; update every `@rolepod/uiproof@…` spawn pin to `@0.13.0` (`.mcp.json` + all manifests); add `dist/schemas` version if emitted. Add CHANGELOG `[0.13.0]` entry summarising this hardening release.
 - **Test:** new `tests/unit/version_lockstep.test.ts` — read every manifest + package.json, assert all equal `0.13.0`; assert every spawn pin equals `@rolepod/uiproof@0.13.0`.
 - **Command:** `npx vitest run tests/unit/version_lockstep.test.ts`
 
 ### Task 3.4 — Offline fallback note for npx-only spawn
-- [ ] `.mcp.json:4` (+ README) — every spawn requires an npx registry fetch; offline/registry-blocked machines get no server. Simplest viable = document a local-install fallback (`npm i -g @rolepod/uiproof@0.13.0` then spawn `rolepod-uiproof`) in README's standalone section; no code change. (Deeper: a `prefer-offline` note.)
+- [x] `.mcp.json:4` (+ README) — every spawn requires an npx registry fetch; offline/registry-blocked machines get no server. Simplest viable = document a local-install fallback (`npm i -g @rolepod/uiproof@0.13.0` then spawn `rolepod-uiproof`) in README's standalone section; no code change. (Deeper: a `prefer-offline` note.)
 - **Test:** `tests/lint/skills.test.ts` (extend) — assert README standalone section contains an offline-fallback anchor string.
 - **Command:** `npx vitest run tests/lint/skills.test.ts`
 

@@ -51,7 +51,7 @@ flow now runs in CI without an AI agent.
 ## 3. Hand the bundle to `rolepod-uiproof replay` for headless re-runs
 
 ```
-npx rolepod-uiproof replay .rolepod-uiproof/artifacts/verify_…/replay.json
+npx @rolepod/uiproof replay .rolepod-uiproof/artifacts/verify_…/replay.json
 ```
 
 Exit code `0` if it passes, `1` otherwise. Useful as a pre-deploy
