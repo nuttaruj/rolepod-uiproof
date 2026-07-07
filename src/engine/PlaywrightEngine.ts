@@ -34,6 +34,15 @@ import type {
   WaitCondition,
 } from "./Engine.js";
 
+/**
+ * Headless is the safe default — display-less CI, servers, and containers
+ * cannot launch a headed browser. Opt into a visible browser with
+ * `ROLEPOD_HEADED=1`.
+ */
+export function resolveHeadless(env: NodeJS.ProcessEnv): boolean {
+  return env.ROLEPOD_HEADED !== "1";
+}
+
 type WebSession = Session & {
   readonly platform: "web";
   readonly browser: Browser;
@@ -202,7 +211,7 @@ export class PlaywrightEngine implements Engine {
           ? webkit
           : chromium;
 
-    const headless = opts.headless ?? (process.env.CI ? true : false);
+    const headless = opts.headless ?? resolveHeadless(process.env);
     const browser = await launcher.launch({ headless });
 
     const contextOptions: Parameters<typeof browser.newContext>[0] = {};

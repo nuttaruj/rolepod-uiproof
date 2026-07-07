@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { log } from "./log.js";
 
 /**
  * Extension Protocol — detection of the parent `rolepod` plugin.
@@ -53,8 +54,21 @@ export function detectRolepodParent(cwd: string = process.cwd()): ParentState {
     return { active: false, protocol: null, gitRoot };
   }
 
-  const protocol = readFileSync(file, "utf8").trim().split(/\r?\n/)[0] ?? null;
-  return { active: true, protocol, gitRoot };
+  try {
+    const protocol = readFileSync(file, "utf8").trim().split(/\r?\n/)[0] ?? null;
+    return { active: true, protocol, gitRoot };
+  } catch (err) {
+    // Marker exists but is unreadable — a directory (EISDIR, e.g. the typo
+    // `mkdir -p .rolepod/parent-active`) or no read permission (EACCES).
+    // Degrade to standalone instead of crashing the whole server at boot:
+    // detectRolepodParent runs inside buildServer before any tool registers,
+    // so an unguarded throw here takes down all 30 tools with a raw fs stack.
+    log.warn("rolepod parent marker unreadable — treating as standalone", {
+      file,
+      err: String(err),
+    });
+    return { active: false, protocol: null, gitRoot };
+  }
 }
 
 /**

@@ -62,27 +62,27 @@ Test infra already exists (vitest, 131 passing). No bootstrap needed. Offline-de
 ## PR2 — Boot & standalone hardening
 
 ### Task 2.1 — Guard `readFileSync` of the parent marker
-- [ ] `src/util/rolepodProtocol.ts:52-57` — `existsSync` guards existence only; `readFileSync` at :56 throws `EISDIR` (marker is a directory — the documented override at :65 invites the `mkdir -p .rolepod/parent-active` typo) or `EACCES` (unreadable) → propagates through `checkProtocolCompat`→`buildServer`→entry `main().catch`→`exit(1)`, killing all 30 tools with a raw fs stack (audit obs 16691, reproduced live). Wrap :56 in try/catch: on error, log a clear warning (`.rolepod/parent-active is present but unreadable (<code>); treating as standalone`) and return `{ active: false, protocol: null, gitRoot }`.
+- [x] `src/util/rolepodProtocol.ts:52-57` — `existsSync` guards existence only; `readFileSync` at :56 throws `EISDIR` (marker is a directory — the documented override at :65 invites the `mkdir -p .rolepod/parent-active` typo) or `EACCES` (unreadable) → propagates through `checkProtocolCompat`→`buildServer`→entry `main().catch`→`exit(1)`, killing all 30 tools with a raw fs stack (audit obs 16691, reproduced live). Wrap :56 in try/catch: on error, log a clear warning (`.rolepod/parent-active is present but unreadable (<code>); treating as standalone`) and return `{ active: false, protocol: null, gitRoot }`.
 - **Test:** `tests/unit/parent_marker.test.ts` — point `detectRolepodParent` at a tmp gitRoot where `.rolepod/parent-active` is a **directory**; assert it returns `active:false` and does not throw. Second case: a normal `v1` file returns `active:true, protocol:"v1"`.
 - **Command:** `npx vitest run tests/unit/parent_marker.test.ts`
 
 ### Task 2.2 — Add uuid suffix to with-parent run dirs
-- [ ] `src/artifact/ArtifactStore.ts:112-118` — with-parent `runId = ${ts}-rolepod-uiproof-${skill}` has no uniqueness suffix; same-second same-skill runs clobber each other's evidence (the code comment promises a uuid "when two runs could collide" but never appends one). Append `-${randomUUID().slice(0,6)}` to the with-parent branch too (keep it sortable: `${ts}-rolepod-uiproof-${skill}-${short}`). Confirm the parent's evidence-aggregation (check-work) globs by prefix, not exact name — grep `plugins/rolepod/skills/*/` if reachable; otherwise the sortable prefix keeps ordering intact.
+- [x] `src/artifact/ArtifactStore.ts:112-118` — with-parent `runId = ${ts}-rolepod-uiproof-${skill}` has no uniqueness suffix; same-second same-skill runs clobber each other's evidence (the code comment promises a uuid "when two runs could collide" but never appends one). Append `-${randomUUID().slice(0,6)}` to the with-parent branch too (keep it sortable: `${ts}-rolepod-uiproof-${skill}-${short}`). Confirm the parent's evidence-aggregation (check-work) globs by prefix, not exact name — grep `plugins/rolepod/skills/*/` if reachable; otherwise the sortable prefix keeps ordering intact.
 - **Test:** `tests/unit/artifact_gitignore.test.ts` (extend) or new `tests/unit/artifact_runid.test.ts` — force `mode:"with-parent"`, call `startRun` twice with the same skill + a stubbed identical timestamp, assert the two `runDir`s differ.
 - **Command:** `npx vitest run tests/unit/artifact_runid.test.ts`
 
 ### Task 2.3 — Re-detect mode per run instead of freezing at boot
-- [ ] `src/artifact/ArtifactStore.ts:77` (+ construction path) — `mode` is captured once at server spawn, racing the parent's SessionStart hook that writes the marker (audit obs 16768). Re-evaluate `detectRolepodParent()` at `startRun` time (cheap: one `existsSync`), so a marker written after boot is honoured. Keep the boot value as a default; recompute per run.
+- [x] `src/artifact/ArtifactStore.ts:77` (+ construction path) — `mode` is captured once at server spawn, racing the parent's SessionStart hook that writes the marker (audit obs 16768). Re-evaluate `detectRolepodParent()` at `startRun` time (cheap: one `existsSync`), so a marker written after boot is honoured. Keep the boot value as a default; recompute per run.
 - **Test:** `tests/unit/artifact_mode_race.test.ts` — construct store with no marker (standalone), then create the marker file, then `startRun`, assert the run resolves to `with-parent` root.
 - **Command:** `npx vitest run tests/unit/artifact_mode_race.test.ts`
 
 ### Task 2.4 — Default to headless off-CI; make headed opt-in
-- [ ] `src/engine/PlaywrightEngine.ts:~205` — headed launch is the default when not on CI → fails on display-less hosts (headless servers, containers). Flip default to `headless:true`; honour an explicit `ROLEPOD_HEADED=1` / capture opt for headed. Verify the launch-options construction site and any test that asserts headed.
+- [x] `src/engine/PlaywrightEngine.ts:~205` — headed launch is the default when not on CI → fails on display-less hosts (headless servers, containers). Flip default to `headless:true`; honour an explicit `ROLEPOD_HEADED=1` / capture opt for headed. Verify the launch-options construction site and any test that asserts headed.
 - **Test:** `tests/smoke/example_com.test.ts` already exercises a real launch; add an assertion path or a unit on the launch-options builder (extract if needed) asserting `headless===true` absent the env flag.
 - **Command:** `npx vitest run tests/smoke/example_com.test.ts`
 
 ### Task 2.5 — Doctor: verify Playwright browsers are actually runnable
-- [ ] `src/cli/doctor.ts:~65` — checks only that a Chromium cache dir exists → false OK after a partial/other-browser install, false FAIL on Windows and under `PLAYWRIGHT_BROWSERS_PATH=0`. Replace the dir-exists heuristic with `chromium.executablePath()` existence (Playwright API) or a guarded `launch()+close()` probe; downgrade to warn on `PLAYWRIGHT_BROWSERS_PATH=0` (bundled-browser mode).
+- [x] `src/cli/doctor.ts:~65` — checks only that a Chromium cache dir exists → false OK after a partial/other-browser install, false FAIL on Windows and under `PLAYWRIGHT_BROWSERS_PATH=0`. Replace the dir-exists heuristic with `chromium.executablePath()` existence (Playwright API) or a guarded `launch()+close()` probe; downgrade to warn on `PLAYWRIGHT_BROWSERS_PATH=0` (bundled-browser mode).
 - **Test:** `tests/unit/cli.test.ts` (extend) — invoke doctor's Playwright check with a stubbed `executablePath`; assert OK when it resolves, warn/FAIL with actionable text when it doesn't.
 - **Command:** `npx vitest run tests/unit/cli.test.ts`
 

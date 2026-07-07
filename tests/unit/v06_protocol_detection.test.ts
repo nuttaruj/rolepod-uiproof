@@ -136,8 +136,9 @@ describe("ArtifactStore integration with marker", () => {
     expect(run.runDir).toBe(
       resolve(tmp, ".rolepod", "evidence", run.runId),
     );
-    // With-parent uses ts-rolepod-uiproof-{skill} format.
-    expect(run.runId).toMatch(/^\d+T\d+-rolepod-uiproof-verify-ui$/);
+    // With-parent uses ts-rolepod-uiproof-{skill}-{uuid6}; the uuid keeps
+    // same-second same-skill runs from clobbering each other's evidence.
+    expect(run.runId).toMatch(/^\d+T\d+-rolepod-uiproof-verify-ui-[0-9a-f]{6}$/);
   });
 
   it("anchors with-parent path at git root even when constructed from a subdir", async () => {
