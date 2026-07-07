@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { isAbsolute, resolve, sep } from "node:path";
+import { RolepodMcpError } from "../util/errors.js";
 import { log } from "../util/log.js";
 import { detectRolepodParent } from "../util/rolepodProtocol.js";
 
@@ -172,15 +173,33 @@ export class ArtifactStore {
   }
 
   async writeReport(runDir: string, name: string, body: string): Promise<string> {
-    const path = resolve(runDir, name);
+    const path = this.resolveInside(runDir, name);
     await writeFile(path, body, "utf8");
     return path;
   }
 
   async writeBytes(runDir: string, name: string, buf: Buffer): Promise<string> {
-    const path = resolve(runDir, name);
+    const path = this.resolveInside(runDir, name);
     await writeFile(path, buf);
     return path;
+  }
+
+  /**
+   * Resolve `name` under `runDir`, rejecting any name that escapes the run
+   * directory. A caller-supplied filename (e.g. scaffold_e2e's `filename`)
+   * must never write outside the run dir via an absolute path or `../`.
+   */
+  private resolveInside(runDir: string, name: string): string {
+    const base = resolve(runDir);
+    const target = resolve(base, name);
+    if (isAbsolute(name) || (target !== base && !target.startsWith(base + sep))) {
+      throw new RolepodMcpError(
+        "invalid_input",
+        `Artifact name "${name}" escapes the run directory.`,
+        { name },
+      );
+    }
+    return target;
   }
 
   async ensureDir(absDir: string): Promise<string> {

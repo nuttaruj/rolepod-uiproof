@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import {
   scaffoldE2eShape,
   ToolNames,
@@ -43,11 +43,16 @@ export const scaffoldE2eTool: ToolModule<typeof scaffoldE2eShape> = {
       let dependencies: string[];
       let setupNotes: string;
 
+      // Defense in depth: a user-supplied filename is reduced to a basename
+      // so it can never target a directory outside the run dir. ArtifactStore
+      // also rejects escaping names.
+      const userFilename = args.filename ? basename(args.filename) : undefined;
+
       switch (args.framework) {
         case "playwright-test":
           body = renderPlaywrightTest(ctxObj);
           language = "typescript";
-          filename = args.filename ?? `${slug}.spec.ts`;
+          filename = userFilename ?? `${slug}.spec.ts`;
           dependencies = ["@playwright/test"];
           setupNotes =
             "Install: `npm i -D @playwright/test && npx playwright install`. Run: `npx playwright test`.";
@@ -55,7 +60,7 @@ export const scaffoldE2eTool: ToolModule<typeof scaffoldE2eShape> = {
         case "vitest+playwright":
           body = renderVitestPlaywright(ctxObj);
           language = "typescript";
-          filename = args.filename ?? `${slug}.test.ts`;
+          filename = userFilename ?? `${slug}.test.ts`;
           dependencies = ["vitest", "playwright"];
           setupNotes =
             "Install: `npm i -D vitest playwright && npx playwright install chromium`. Run: `npx vitest`.";
@@ -63,7 +68,7 @@ export const scaffoldE2eTool: ToolModule<typeof scaffoldE2eShape> = {
         case "pytest+selenium":
           body = renderPytestSelenium(ctxObj);
           language = "python";
-          filename = args.filename ?? `test_${slug}.py`;
+          filename = userFilename ?? `test_${slug}.py`;
           dependencies = ["pytest", "selenium"];
           setupNotes =
             "Install: `pip install pytest selenium`. Ensure a Chrome driver is on PATH. Run: `pytest`.";
@@ -189,7 +194,7 @@ function renderPytestSelenium(c: RenderCtx): string {
     `from selenium.webdriver.common.keys import Keys`,
     ``,
     `def test_${slugifyPy(c.args.scenario_nl)}():`,
-    `    """${c.args.scenario_nl}"""`,
+    `    """${pyDocstring(c.args.scenario_nl)}"""`,
     `    driver = webdriver.Chrome()`,
     `    try:`,
     `        driver.get(${JSON.stringify(url)})`,
@@ -432,6 +437,22 @@ function slugifyPy(s: string): string {
 }
 
 function escapePy(s: string): string {
+  // Values here are interpolated into single-line Python f-strings (XPath).
+  // Braces must be doubled or Python treats them as replacement fields;
+  // control chars would break the single-line string literal.
+  return s
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\{/g, "{{")
+    .replace(/\}/g, "}}")
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t");
+}
+
+function pyDocstring(s: string): string {
+  // Body of a triple-quoted docstring: escape backslashes and double-quotes so
+  // an embedded `"""` cannot terminate the string early.
   return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
