@@ -99,6 +99,19 @@ if (names.length !== expected.length) {
   process.exit(1);
 }
 
+// Strict input schema: an unknown top-level key must be rejected, not silently
+// stripped (a typo'd param used to drop to a default and mislead).
+const strictResp = await call("tools/call", {
+  name: "browser_close",
+  arguments: { session_id: "nope", bogus_unknown_key: 1 },
+});
+const strictText = JSON.stringify(strictResp);
+if (!/unrecognized|bogus_unknown_key/i.test(strictText)) {
+  console.error("STRICT schema not enforced — unknown key was not rejected:", strictText.slice(0, 300));
+  process.exit(1);
+}
+console.log("[strict] unknown top-level key rejected");
+
 console.log("OK");
 child.kill("SIGTERM");
 setTimeout(() => process.exit(0), 200);

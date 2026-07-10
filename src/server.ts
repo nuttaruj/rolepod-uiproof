@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
 import { ArtifactStore } from "./artifact/ArtifactStore.js";
 import { createMobileEngine, createWebEngine } from "./engine/factory.js";
 import { SessionRegistry } from "./session/SessionRegistry.js";
@@ -147,7 +148,11 @@ export function buildServer(
       {
         title: meta?.title,
         description: t.description,
-        inputSchema: t.inputShape,
+        // Pass a STRICT object (not the raw shape) so the SDK rejects unknown
+        // top-level params instead of silently stripping them — a typo'd key
+        // (e.g. `expct` for `expect`) now errors loudly rather than dropping to
+        // a default and producing a misleading result.
+        inputSchema: z.object(t.inputShape as z.ZodRawShape).strict(),
         annotations: meta?.annotations,
       },
       t.build(ctx) as Parameters<typeof mcp.registerTool>[2],

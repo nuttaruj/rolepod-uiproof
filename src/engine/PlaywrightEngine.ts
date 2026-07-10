@@ -12,6 +12,7 @@ import {
   type Request,
   type Response,
   type Dialog,
+  type CDPSession,
 } from "playwright";
 import {
   RolepodMcpError,
@@ -116,8 +117,11 @@ type SessionInternals = {
   activePageIndex: number;
   consoleBuffer: ConsoleEntry[];
   networkBuffer: NetworkEntry[];
-  networkInflight: Map<string, { id: number; startedAt: number; resourceType: string }>;
   networkNextId: number;
+  /** Persistent CDP session for network/CPU throttle — detaching reverts the
+   * emulation, so it is kept alive until close() (rebound if the page changes). */
+  cdpSession: CDPSession | null;
+  cdpPage: Page | null;
   dialogArming: DialogArming | null;
   lastDialog: DialogInfo | null;
   captureOpts: NonNullable<OpenOptions["capture"]> | undefined;
@@ -294,8 +298,9 @@ export class PlaywrightEngine implements Engine {
       activePageIndex: 0,
       consoleBuffer: [],
       networkBuffer: [],
-      networkInflight: new Map(),
       networkNextId: 1,
+      cdpSession: null,
+      cdpPage: null,
       dialogArming: null,
       lastDialog: null,
       captureOpts: opts.capture,
@@ -350,6 +355,10 @@ export class PlaywrightEngine implements Engine {
         });
     }
 
+    if (s.cdpSession) {
+      await s.cdpSession.detach().catch(() => undefined);
+      s.cdpSession = null;
+    }
     await s.session.context.close().catch((err: unknown) => {
       log.warn("context close failed", { session_id: session.id, err: String(err) });
     });
@@ -975,20 +984,28 @@ export class PlaywrightEngine implements Engine {
           `networkThrottle / cpuThrottle require chromium (CDP-backed); current browser is "${browserName}".`,
         );
       }
-      const cdp = await ctx.newCDPSession(page);
-      try {
-        if (opts.networkThrottle) {
-          const preset = NETWORK_PRESETS[opts.networkThrottle];
-          await cdp.send("Network.enable");
-          await cdp.send("Network.emulateNetworkConditions", preset);
-        }
-        if (opts.cpuThrottle !== undefined) {
-          await cdp.send("Emulation.setCPUThrottlingRate", {
-            rate: opts.cpuThrottle,
-          });
-        }
-      } finally {
-        await cdp.detach().catch(() => undefined);
+      // Keep the CDP session attached — detaching reverts the emulation, so
+      // the previous code applied a throttle that immediately snapped back.
+      // Reuse one persistent session per web session; rebind if the active
+      // page changed; detach happens in close().
+      if (s.cdpSession && s.cdpPage !== page) {
+        await s.cdpSession.detach().catch(() => undefined);
+        s.cdpSession = null;
+      }
+      if (!s.cdpSession) {
+        s.cdpSession = await ctx.newCDPSession(page);
+        s.cdpPage = page;
+      }
+      const cdp = s.cdpSession;
+      if (opts.networkThrottle) {
+        const preset = NETWORK_PRESETS[opts.networkThrottle];
+        await cdp.send("Network.enable");
+        await cdp.send("Network.emulateNetworkConditions", preset);
+      }
+      if (opts.cpuThrottle !== undefined) {
+        await cdp.send("Emulation.setCPUThrottlingRate", {
+          rate: opts.cpuThrottle,
+        });
       }
     }
     this.invalidateRefs(s);
@@ -1070,12 +1087,7 @@ export class PlaywrightEngine implements Engine {
 
     page.on("request", (req: Request) => {
       const id = s.networkNextId++;
-      s.networkInflight.set(req.url() + "::" + req.method() + "::" + id, {
-        id,
-        startedAt: Date.now(),
-        resourceType: req.resourceType(),
-      });
-      // Optimistic entry — will be updated on response/failed.
+      // Optimistic entry — updated on response/failed.
       pushRing(
         s.networkBuffer,
         {

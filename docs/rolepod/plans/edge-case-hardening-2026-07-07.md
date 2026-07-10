@@ -121,7 +121,8 @@ Test infra already exists (vitest, 131 passing). No bootstrap needed. Offline-de
 ## PR4 — False-PASS: core web verdict correctness (highest priority)
 
 ### Task 4.1 — Reject unknown top-level params (strict schemas) so typos can't strip to a free PASS
-- [~] SUPERSEDED by 4.2: MCP SDK consumes a raw ZodRawShape and builds a non-strict object itself (schema/tools.ts:61-64 comment), so `.strict()` is not cleanly reachable. 4.2 (empty-expect in assert mode -> fail) removes the actual false-PASS danger the typo caused. Original note:
+- [x] IMPLEMENTED: register tools with z.object(shape).strict() (server.ts) — MCP SDK 1.29 normalizeObjectSchema passes a ZodObject through, so unknown top-level keys are now rejected (verified live: "Unrecognized key"). 4.2 empty-expect guard remains as defense.
+- [x] ~
 - [ ] `src/schema/tools.ts` — tool-input objects use zod default strip mode; a misspelled key is dropped silently and, combined with `expect: z.array(...).default([])` (:486), yields an unconditional `passed=true` (audit infra finding). Make the **top-level** tool-input objects `.strict()` (reject unknown keys) OR pass through a pre-validation that errors on unknown top-level keys with a helpful message. Keep nested `.default()`s. Verify no legitimate caller passes extra keys (grep tool handlers).
 - **Test:** `tests/unit/schema_strict.test.ts` — parse a `verify_ui_flow` input with `expct:[…]` (typo) and assert it **throws/rejects** rather than defaulting to `passed=true`.
 - **Command:** `npx vitest run tests/unit/schema_strict.test.ts`
@@ -215,7 +216,7 @@ Test infra already exists (vitest, 131 passing). No bootstrap needed. Offline-de
 - **Command:** `npx vitest run tests/smoke/dialog_arming.test.ts`
 
 ### Task 6.5 — (minor) network/cpu throttle persistence + inflight map
-- [~] DEFERRED: throttle-revert-on-detach is unverified ("likely") and a correct fix needs a persistent per-session (page-bound) CDP session; networkInflight is dead (never read). Both minor / non-verdict — tracked as follow-ups, not shipped in PR6.
+- [x] DONE: throttle now uses a persistent per-session CDP session (detached on close, not after apply) so emulation survives; dead networkInflight map removed.
 - [ ] `src/engine/PlaywrightEngine.ts:870-886` — CDP session is `detach()`ed in `finally` right after applying emulation; verify emulation survives detach (Playwright keeps CDP emulation session-scoped — if it reverts, keep the CDP session on the SessionInternals and detach only on `close`). `:962-968` — `networkInflight` grows and is never pruned/read; prune entries on `requestfinished`/`requestfailed` (the response listener) or drop the map if genuinely unused.
 - **Test:** `tests/smoke/` assert `set_env({networkThrottle:"Slow 3G"})` then a navigation shows throttled timing (bounded, flaky-tolerant), or unit that the inflight map shrinks after a completed request.
 - **Command:** `npx vitest run tests/smoke/v02_surface.test.ts`
