@@ -43,6 +43,25 @@ export function resolveHeadless(env: NodeJS.ProcessEnv): boolean {
   return env.ROLEPOD_HEADED !== "1";
 }
 
+/**
+ * Map Playwright's actionability TimeoutError to a classified engine_error so a
+ * hidden/disabled/detached/covered target reads as "not actionable" instead of
+ * a raw stack after a stall. Returns null for any other error (rethrow as-is).
+ */
+export function classifyActionTimeout(
+  what: string,
+  err: unknown,
+): RolepodMcpError | null {
+  if (err instanceof Error && err.name === "TimeoutError") {
+    return new RolepodMcpError(
+      "engine_error",
+      `${what} timed out — the target element is likely not actionable (hidden, disabled, detached, or covered by another element). Set ROLEPOD_ACTION_TIMEOUT_MS to fail faster. (${err.message.split("\n")[0]})`,
+      { action: what },
+    );
+  }
+  return null;
+}
+
 type WebSession = Session & {
   readonly platform: "web";
   readonly browser: Browser;
@@ -367,6 +386,32 @@ export class PlaywrightEngine implements Engine {
     };
   }
 
+  /**
+   * Per-action timeout override (ms) via `ROLEPOD_ACTION_TIMEOUT_MS`. Lets a
+   * caller fail fast on a non-actionable element instead of waiting out
+   * Playwright's 30s default. Absent → Playwright default.
+   */
+  private actionTimeout(): { timeout: number } | undefined {
+    const raw = process.env.ROLEPOD_ACTION_TIMEOUT_MS;
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) && n > 0 ? { timeout: n } : undefined;
+  }
+
+  /**
+   * Run an interaction and classify Playwright's actionability TimeoutError
+   * into a clear, actionable engine_error, instead of surfacing a raw stack
+   * after a 30s stall on a hidden/disabled/detached/covered element.
+   */
+  private async runAction<T>(what: string, fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (err) {
+      const classified = classifyActionTimeout(what, err);
+      if (classified) throw classified;
+      throw err;
+    }
+  }
+
   async click(
     session: Session,
     ref: string,
@@ -374,7 +419,12 @@ export class PlaywrightEngine implements Engine {
   ): Promise<void> {
     const s = this.requireSession(session.id);
     const locator = this.resolveLocator(s, ref);
-    await locator.click(opts?.button ? { button: opts.button } : undefined);
+    await this.runAction("click", () =>
+      locator.click({
+        ...(opts?.button ? { button: opts.button } : {}),
+        ...(this.actionTimeout() ?? {}),
+      }),
+    );
     this.invalidateRefs(s);
   }
 
@@ -386,8 +436,10 @@ export class PlaywrightEngine implements Engine {
   ): Promise<void> {
     const s = this.requireSession(session.id);
     const locator = this.resolveLocator(s, ref);
-    if (opts?.clearFirst) await locator.fill("");
-    await locator.fill(text);
+    if (opts?.clearFirst) {
+      await this.runAction("type", () => locator.fill("", this.actionTimeout()));
+    }
+    await this.runAction("type", () => locator.fill(text, this.actionTimeout()));
     this.invalidateRefs(s);
   }
 
@@ -659,7 +711,7 @@ export class PlaywrightEngine implements Engine {
   async hover(session: Session, ref: string): Promise<void> {
     const s = this.requireSession(session.id);
     const locator = this.resolveLocator(s, ref);
-    await locator.hover();
+    await this.runAction("hover", () => locator.hover(this.actionTimeout()));
     // Hover does not modify DOM in the same way click does; keep refs valid.
   }
 
@@ -671,7 +723,7 @@ export class PlaywrightEngine implements Engine {
     const s = this.requireSession(session.id);
     const from = this.resolveLocator(s, fromRef);
     const to = this.resolveLocator(s, toRef);
-    await from.dragTo(to);
+    await this.runAction("drag", () => from.dragTo(to, this.actionTimeout()));
     this.invalidateRefs(s);
   }
 
@@ -680,16 +732,19 @@ export class PlaywrightEngine implements Engine {
     for (const field of fields) {
       const locator = this.resolveLocator(s, field.ref);
       const kind = field.kind;
+      const t = this.actionTimeout();
       if (kind === "checkbox" || kind === "radio") {
         const checked = typeof field.value === "boolean"
           ? field.value
           : field.value === "true" || field.value === "on";
-        await locator.setChecked(checked);
+        await this.runAction("fill_form", () => locator.setChecked(checked, t));
       } else if (kind === "select") {
-        await locator.selectOption(String(field.value));
+        await this.runAction("fill_form", () =>
+          locator.selectOption(String(field.value), t),
+        );
       } else {
         // input / textarea / contenteditable
-        await locator.fill(String(field.value));
+        await this.runAction("fill_form", () => locator.fill(String(field.value), t));
       }
     }
     this.invalidateRefs(s);
@@ -709,7 +764,9 @@ export class PlaywrightEngine implements Engine {
       );
     }
     const locator = this.resolveLocator(s, ref);
-    await locator.setInputFiles(filePath);
+    await this.runAction("upload", () =>
+      locator.setInputFiles(filePath, this.actionTimeout()),
+    );
     this.invalidateRefs(s);
   }
 
