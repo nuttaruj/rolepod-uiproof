@@ -93,6 +93,11 @@ export function classifyMetric(
   hadInteraction: boolean = true,
 ): CwvVerdict {
   if (kind === "inp" && !hadInteraction) return "unmeasured";
+  // A real LCP paint is always > 0ms; lcp <= 0 means the observer never fired
+  // (SPA served instantly from cache, a background tab, or a page that never
+  // painted its main content). Classifying that as "good" is a false pass —
+  // the metric is simply unmeasured.
+  if (kind === "lcp" && value <= 0) return "unmeasured";
   const t =
     kind === "lcp" ? thresholds.lcp_ms : kind === "inp" ? thresholds.inp_ms : thresholds.cls;
   if (value <= t) return "good";
@@ -110,5 +115,9 @@ export function computeOverallVerdict(verdicts: {
   const all = [verdicts.lcp, verdicts.inp, verdicts.cls];
   if (all.includes("poor")) return "fail";
   if (all.includes("needs-improvement")) return "warn";
+  // LCP is the headline metric; if it was never measured we cannot claim a
+  // pass. (INP is legitimately unmeasured without an interaction, and CLS 0 is
+  // a real value, so only LCP forces a warn here.)
+  if (verdicts.lcp === "unmeasured") return "warn";
   return "pass";
 }

@@ -530,7 +530,12 @@ export const visualDiffShape = {
   open: browserOpenSchema,
   baseline_id: z.string().min(1),
   viewport: viewportSchema.optional(),
-  threshold_pct: z.number().min(0).max(1).default(0.1),
+  /**
+   * Max fraction of differing pixels (0–1) that still passes. Default 0.01
+   * (1% of pixels). The old 0.1 default let a tenth of the page change and
+   * still report a pass — too lax to catch real visual regressions.
+   */
+  threshold_pct: z.number().min(0).max(1).default(0.01),
   close_on_finish: z.boolean().default(true),
   /** Pixel sensitivity for pixelmatch (0 = strict, 1 = lax). Default 0.1. */
   pixel_threshold: z.number().min(0).max(1).default(0.1),

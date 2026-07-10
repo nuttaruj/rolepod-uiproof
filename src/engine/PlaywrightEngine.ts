@@ -415,10 +415,16 @@ export class PlaywrightEngine implements Engine {
           .waitFor({ state: "visible", timeout: timeoutMs });
         break;
       case "ref_exists":
+        // Role-agnostic: wait for ANY element whose accessible text matches the
+        // query, not just a button, so `ref_exists` no longer falsely times out
+        // for links, inputs, headings, etc. Wait for `visible` (not merely
+        // `attached`) so a hidden duplicate (e.g. a display:none responsive-nav
+        // copy earlier in the DOM) can't satisfy the wait before the real,
+        // visible element renders.
         await page
-          .getByRole("button", { name: cond.query })
+          .getByText(cond.query, { exact: false })
           .first()
-          .waitFor({ state: "attached", timeout: timeoutMs });
+          .waitFor({ state: "visible", timeout: timeoutMs });
         break;
       case "url_matches":
         await page.waitForURL(new RegExp(cond.pattern), { timeout: timeoutMs });

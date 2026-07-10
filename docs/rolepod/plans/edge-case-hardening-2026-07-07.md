@@ -121,38 +121,39 @@ Test infra already exists (vitest, 131 passing). No bootstrap needed. Offline-de
 ## PR4 — False-PASS: core web verdict correctness (highest priority)
 
 ### Task 4.1 — Reject unknown top-level params (strict schemas) so typos can't strip to a free PASS
+- [~] SUPERSEDED by 4.2: MCP SDK consumes a raw ZodRawShape and builds a non-strict object itself (schema/tools.ts:61-64 comment), so `.strict()` is not cleanly reachable. 4.2 (empty-expect in assert mode -> fail) removes the actual false-PASS danger the typo caused. Original note:
 - [ ] `src/schema/tools.ts` — tool-input objects use zod default strip mode; a misspelled key is dropped silently and, combined with `expect: z.array(...).default([])` (:486), yields an unconditional `passed=true` (audit infra finding). Make the **top-level** tool-input objects `.strict()` (reject unknown keys) OR pass through a pre-validation that errors on unknown top-level keys with a helpful message. Keep nested `.default()`s. Verify no legitimate caller passes extra keys (grep tool handlers).
 - **Test:** `tests/unit/schema_strict.test.ts` — parse a `verify_ui_flow` input with `expct:[…]` (typo) and assert it **throws/rejects** rather than defaulting to `passed=true`.
 - **Command:** `npx vitest run tests/unit/schema_strict.test.ts`
 
 ### Task 4.2 — `verify_ui_flow` must FAIL (not silently pass) on an empty `expect`
-- [ ] `src/tools/composite/verify_ui_flow.ts` + `src/schema/tools.ts:486` — an empty expectation list must not report `passed=true` as if verified. Simplest viable: when `expect` is empty **and** `mode==="assert"`, return a `passed=false` / `status:"inconclusive"` with message "no expectations declared — nothing was verified". (Keep `reproduce` mode allowed to have no expectations.)
+- [x] `src/tools/composite/verify_ui_flow.ts` + `src/schema/tools.ts:486` — an empty expectation list must not report `passed=true` as if verified. Simplest viable: when `expect` is empty **and** `mode==="assert"`, return a `passed=false` / `status:"inconclusive"` with message "no expectations declared — nothing was verified". (Keep `reproduce` mode allowed to have no expectations.)
 - **Test:** `tests/smoke/v02_surface.test.ts` (extend) or unit on the verdict reducer — assert empty-expect assert-mode → not `passed:true`.
 - **Command:** `npx vitest run tests/smoke/v02_surface.test.ts`
 
 ### Task 4.3 — CWV: return `unmeasured` (not `good`) when a metric never fired
-- [ ] `src/engine/cwv.ts:89-101` — `classifyMetric` returns `good` for `value<=t`, so an unmeasured LCP (`value===0`/undefined) classifies as `good`→pass (audit obs 16754). Thread a `measured` flag (like the existing `hadInteraction` for INP at :95) for LCP/CLS; return `"unmeasured"` when the metric never produced a value; ensure `computeOverallVerdict` treats all-unmeasured as `warn`/`fail`, never `pass`. Fix the collection site in `measure_cwv` to distinguish "0" from "never observed".
+- [x] `src/engine/cwv.ts:89-101` — `classifyMetric` returns `good` for `value<=t`, so an unmeasured LCP (`value===0`/undefined) classifies as `good`→pass (audit obs 16754). Thread a `measured` flag (like the existing `hadInteraction` for INP at :95) for LCP/CLS; return `"unmeasured"` when the metric never produced a value; ensure `computeOverallVerdict` treats all-unmeasured as `warn`/`fail`, never `pass`. Fix the collection site in `measure_cwv` to distinguish "0" from "never observed".
 - **Test:** `tests/unit/v07_measurement.test.ts` (extend) — `classifyMetric("lcp", 0, thresholds, /*measured*/ false)` → `"unmeasured"`; overall verdict with unmeasured LCP is not `"pass"`.
 - **Command:** `npx vitest run tests/unit/v07_measurement.test.ts`
 
 ### Task 4.4 — `wait_for ref_exists` must match the actual element, not hardcoded `role="button"`
-- [ ] `src/engine/PlaywrightEngine.ts:408-412` — `ref_exists` does `getByRole("button",{name:query})`, so waiting on any non-button (link/input/heading/text) falsely times out (3 dims). Replace with a role-agnostic locator: resolve `query` the same way the click/act path resolves refs (by ref id if it looks like a ref, else `getByText`/`getByRole` union or `page.locator` on the snapshot), matching how `verify_ui_flow` resolves queries. Rename the condition's intent in code comments to match.
+- [x] `src/engine/PlaywrightEngine.ts:408-412` — `ref_exists` does `getByRole("button",{name:query})`, so waiting on any non-button (link/input/heading/text) falsely times out (3 dims). Replace with a role-agnostic locator: resolve `query` the same way the click/act path resolves refs (by ref id if it looks like a ref, else `getByText`/`getByRole` union or `page.locator` on the snapshot), matching how `verify_ui_flow` resolves queries. Rename the condition's intent in code comments to match.
 - **Test:** `tests/smoke/verify_scroll_settle.test.ts` or `example_com.test.ts` — `wait_for ref_exists` on a **link** (`example.com` "More information" anchor) resolves without timeout.
 - **Command:** `npx vitest run tests/smoke/example_com.test.ts`
 
 ### Task 4.5 — `verify_ui_flow` query ambiguity must be reported, not silently first-match
-- [ ] `src/tools/composite/verify_ui_flow.ts:~637` — an ambiguous substring query silently resolves to the first depth-first match with no role filter → acts on the wrong element and returns a wrong verdict. When >1 element matches, return an `ambiguous_query` failure listing the top candidates (text + role) instead of guessing.
+- [x] `src/tools/composite/verify_ui_flow.ts:~637` — an ambiguous substring query silently resolves to the first depth-first match with no role filter → acts on the wrong element and returns a wrong verdict. When >1 element matches, return an `ambiguous_query` failure listing the top candidates (text + role) instead of guessing.
 - **Test:** `tests/smoke/scope_ref.test.ts` (extend) — a page with two "Submit" targets → assert the tool returns an ambiguity error, not a silent success.
 - **Command:** `npx vitest run tests/smoke/scope_ref.test.ts`
 
 ### Task 4.6 — `visual_diff`: fail on missing/broken baseline seed; tighten default threshold
-- [ ] `src/tools/composite/visual_diff.ts:~70` — first-run seeds a baseline from whatever rendered, including a 404/blank page, then reports `passed=true` and poisons all future diffs. On seed, require the page load succeeded (HTTP < 400 — see Task 5.1's status helper) and the screenshot is non-blank (dimensions > 0, not all-one-color); on seed, return `status:"baseline_created"` (not `passed:true`).
+- [x] `src/tools/composite/visual_diff.ts:~70` — first-run seeds a baseline from whatever rendered, including a 404/blank page, then reports `passed=true` and poisons all future diffs. On seed, require the page load succeeded (HTTP < 400 — see Task 5.1's status helper) and the screenshot is non-blank (dimensions > 0, not all-one-color); on seed, return `status:"baseline_created"` (not `passed:true`).
 - [ ] `src/schema/tools.ts:533` — `threshold_pct` default `0.1` = 10% of pixels may change and still PASS. Lower default to a defensible value (`0.01` = 1%, or express as ratio consistent with pixelmatch output) and document the unit clearly in the schema description.
 - **Test:** `tests/smoke/visual_diff_settle.test.ts` (extend) — (a) seeding returns `baseline_created` not `passed:true`; (b) a diff exceeding 1% fails at the new default.
 - **Command:** `npx vitest run tests/smoke/visual_diff_settle.test.ts`
 
 ### Task 4.7 — `no_console_errors`/`no_failed_requests` must not silently PASS on mobile sessions
-- [ ] `src/tools/composite/verify_ui_flow.ts:~551` — these expectations are web-only; on an Appium session they can't be evaluated but currently pass. Return `status:"unsupported"`/`passed:false` with "console/network assertions require a web session" when the active engine is Appium.
+- [x] `src/tools/composite/verify_ui_flow.ts:~551` — these expectations are web-only; on an Appium session they can't be evaluated but currently pass. Return `status:"unsupported"`/`passed:false` with "console/network assertions require a web session" when the active engine is Appium.
 - **Test:** `tests/unit` with a stubbed mobile engine, or assert the branch via the verdict reducer — mobile + `no_console_errors` → not `passed:true`.
 - **Command:** `npx vitest run tests/unit/v06_protocol_detection.test.ts`
 

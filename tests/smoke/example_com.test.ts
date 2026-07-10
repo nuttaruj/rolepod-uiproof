@@ -120,6 +120,39 @@ describe("verify_ui_flow — composite", () => {
     expect(String(body.failure_reason)).toMatch(/this string does not appear/);
   });
 
+  it("assert mode with an empty expect fails instead of silently passing", async () => {
+    const handler = verifyUiFlowTool.build(ctx);
+    const result = await handler({
+      mode: "assert",
+      open: { platform: "web", url: EXAMPLE_URL, headless: true },
+      steps: [],
+      expect: [],
+      capture: ["screenshot"],
+      close_on_finish: true,
+      minimize: false,
+    });
+    const body = result.structuredContent as Record<string, unknown>;
+    expect(body.passed).toBe(false);
+    expect(String(body.failure_reason)).toMatch(/no expectations/i);
+  });
+
+  it("wait_for ref_exists resolves a non-button element (role-agnostic)", async () => {
+    const handler = verifyUiFlowTool.build(ctx);
+    const result = await handler({
+      mode: "assert",
+      open: { platform: "web", url: EXAMPLE_URL, headless: true },
+      // "Example Domain" is an <h1>, not a button — the old button-only
+      // ref_exists would time out here.
+      steps: [{ kind: "wait_for", condition: { kind: "ref_exists", query: "Example Domain" } }],
+      expect: [{ kind: "text_visible", text: "Example Domain" }],
+      capture: ["screenshot"],
+      close_on_finish: true,
+      minimize: false,
+    });
+    const body = result.structuredContent as Record<string, unknown>;
+    expect(body.passed).toBe(true);
+  });
+
   it("mode='reproduce' minimize=false runs without minimization metadata", async () => {
     const handler = verifyUiFlowTool.build(ctx);
     const result = await handler({

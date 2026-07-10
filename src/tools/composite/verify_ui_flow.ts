@@ -19,6 +19,14 @@ import { writeManifest, type ManifestArtifact } from "../../util/manifest.js";
 import { ok, safeHandler } from "../result.js";
 import type { ToolContext, ToolModule } from "../types.js";
 
+/** Expectation kinds that can only be evaluated on a web (Playwright) session. */
+const WEB_ONLY_EXPECTS = new Set([
+  "no_console_errors",
+  "no_failed_requests",
+  "request_made",
+  "response_status",
+]);
+
 /**
  * Composite `verify_ui_flow` — drive a session through steps and evaluate
  * expectations against the resulting state.
@@ -199,14 +207,30 @@ async function runFlow(
     }
 
     finalSnapshot = await engine.snapshot(sessionHandle);
+    const isWeb = engine instanceof PlaywrightEngine;
     const failures: string[] = [];
     for (let i = 0; i < args.expect.length; i++) {
       const expectation = args.expect[i]!;
+      if (!isWeb && WEB_ONLY_EXPECTS.has(expectation.kind)) {
+        // Console/network assertions can't be evaluated on a mobile (Appium)
+        // session; failing loudly beats silently passing an unverifiable check.
+        failures.push(
+          `expect[${i}] ${describeExpect(expectation)} requires a web session (unsupported on ${session.platform})`,
+        );
+        continue;
+      }
       if (!evaluateExpect(expectation, finalSnapshot, engine, session.id)) {
         failures.push(`expect[${i}] ${describeExpect(expectation)}`);
       }
     }
-    if (failures.length === 0) {
+    if (args.mode === "assert" && args.expect.length === 0) {
+      // An assert run with no expectations verified nothing — never report a
+      // pass, or a typo'd `expect` key (which zod drops to the []-default)
+      // would silently succeed.
+      passed = false;
+      failureReason =
+        "No expectations declared — nothing was verified. Add at least one `expect` (e.g. text_visible) so the run asserts on the result.";
+    } else if (failures.length === 0) {
       passed = true;
     } else {
       failureReason = `Expectations failed: ${failures.join("; ")}`;
@@ -390,14 +414,12 @@ async function runStep(
 ): Promise<void> {
   switch (step.kind) {
     case "click": {
-      const ref = findRefByQuery(snap.tree, step.query);
-      if (!ref) throw missingQuery(step.query);
+      const ref = resolveStepRef(snap.tree, step.query);
       await engine.click(session, ref);
       return;
     }
     case "type": {
-      const ref = findRefByQuery(snap.tree, step.query);
-      if (!ref) throw missingQuery(step.query);
+      const ref = resolveStepRef(snap.tree, step.query);
       await engine.type(
         session,
         ref,
@@ -416,23 +438,19 @@ async function runStep(
       await engine.navigate(session, step.url);
       return;
     case "hover": {
-      const ref = findRefByQuery(snap.tree, step.query);
-      if (!ref) throw missingQuery(step.query);
+      const ref = resolveStepRef(snap.tree, step.query);
       await engine.hover(session, ref);
       return;
     }
     case "drag": {
-      const fromRef = findRefByQuery(snap.tree, step.from_query);
-      if (!fromRef) throw missingQuery(step.from_query);
-      const toRef = findRefByQuery(snap.tree, step.to_query);
-      if (!toRef) throw missingQuery(step.to_query);
+      const fromRef = resolveStepRef(snap.tree, step.from_query);
+      const toRef = resolveStepRef(snap.tree, step.to_query);
       await engine.drag(session, fromRef, toRef);
       return;
     }
     case "fill_form": {
       const resolved = step.fields.map((f) => {
-        const ref = findRefByQuery(snap.tree, f.query);
-        if (!ref) throw missingQuery(f.query);
+        const ref = resolveStepRef(snap.tree, f.query);
         return f.kind !== undefined
           ? { ref, value: f.value, kind: f.kind }
           : { ref, value: f.value };
@@ -441,8 +459,7 @@ async function runStep(
       return;
     }
     case "upload": {
-      const ref = findRefByQuery(snap.tree, step.query);
-      if (!ref) throw missingQuery(step.query);
+      const ref = resolveStepRef(snap.tree, step.query);
       await engine.uploadFile(session, ref, step.file_path);
       return;
     }
@@ -536,7 +553,10 @@ function evaluateExpect(
     case "url_matches":
       return new RegExp(exp.pattern).test(snap.url_or_screen);
     case "ref_in_state": {
-      const node = findNodeByQuery(snap.tree, exp.query);
+      // Resolve the same exact-match-first / ambiguity-aware way as action
+      // steps — the old first-substring-match would evaluate the wrong element
+      // (e.g. "Save Draft" for query "Save") and report a false verdict.
+      const node = resolveExpectNode(snap.tree, exp.query);
       if (!node) return false;
       switch (exp.state) {
         case "visible":
@@ -548,7 +568,9 @@ function evaluateExpect(
       }
     }
     case "no_console_errors": {
-      if (!(engine instanceof PlaywrightEngine)) return true; // mobile = no console
+      // Mobile is handled by the WEB_ONLY_EXPECTS pre-check in runFlow; this
+      // guard stays defensive and returns false (unverifiable ≠ pass).
+      if (!(engine instanceof PlaywrightEngine)) return false;
       const msgs = engine.peekBuffers(sessionId).console.filter(
         (m) => m.level === "error",
       );
@@ -559,7 +581,7 @@ function evaluateExpect(
       return remaining.length === 0;
     }
     case "no_failed_requests": {
-      if (!(engine instanceof PlaywrightEngine)) return true;
+      if (!(engine instanceof PlaywrightEngine)) return false;
       const reqs = engine.peekBuffers(sessionId).network.filter((r) => {
         if (r.failure) return true;
         if (r.status === undefined) return false;
@@ -629,29 +651,67 @@ function describeError(err: unknown): string {
   return String(err);
 }
 
-function findRefByQuery(tree: A11yNode, query: string): string | null {
-  const node = findNodeByQuery(tree, query);
-  return node ? node.ref : null;
+/**
+ * Resolve a step query to exactly one ref. Prefers an exact name/value match
+ * over a substring match, and reports `ambiguous_query` when the query matches
+ * several equally-good elements rather than silently binding to the first —
+ * acting on the wrong element would produce a wrong verdict.
+ */
+export function resolveStepRef(tree: A11yNode, query: string): string {
+  const { exact, partial } = collectNodesByQuery(tree, query);
+  if (exact.length === 1) return exact[0]!.ref;
+  if (exact.length === 0 && partial.length === 1) return partial[0]!.ref;
+  const candidates = exact.length > 0 ? exact : partial;
+  if (candidates.length === 0) throw missingQuery(query);
+  throw ambiguousQuery(query, candidates);
 }
 
-function findNodeByQuery(tree: A11yNode, query: string): A11yNode | null {
+function collectNodesByQuery(
+  tree: A11yNode,
+  query: string,
+): { exact: A11yNode[]; partial: A11yNode[] } {
   const target = query.toLowerCase();
-  const visit = (node: A11yNode): A11yNode | null => {
-    if (
-      (node.name && node.name.toLowerCase().includes(target)) ||
-      (node.value && node.value.toLowerCase().includes(target))
+  const exact: A11yNode[] = [];
+  const partial: A11yNode[] = [];
+  const visit = (node: A11yNode): void => {
+    const name = node.name?.toLowerCase();
+    const value = node.value?.toLowerCase();
+    if (name === target || value === target) {
+      exact.push(node);
+    } else if (
+      (name?.includes(target) ?? false) ||
+      (value?.includes(target) ?? false)
     ) {
-      return node;
+      partial.push(node);
     }
-    if (node.children) {
-      for (const c of node.children) {
-        const hit = visit(c);
-        if (hit) return hit;
-      }
-    }
-    return null;
+    node.children?.forEach(visit);
   };
-  return visit(tree);
+  visit(tree);
+  return { exact, partial };
+}
+
+function ambiguousQuery(query: string, candidates: A11yNode[]): RolepodMcpError {
+  const top = candidates
+    .slice(0, 5)
+    .map((n) => `${n.role}${n.name ? ` "${n.name}"` : ""}`);
+  return new RolepodMcpError(
+    "ambiguous_query",
+    `Query "${query}" matched ${candidates.length} elements — refine it to target one. Candidates: ${top.join(", ")}${candidates.length > 5 ? ", …" : ""}`,
+    { query, match_count: candidates.length },
+  );
+}
+
+/**
+ * Resolve a query to a single node for an expectation. Exact name/value match
+ * wins over substring; returns null when nothing matches OR the query is
+ * ambiguous (several equal matches), so the expectation fails rather than
+ * verifying the wrong element.
+ */
+export function resolveExpectNode(tree: A11yNode, query: string): A11yNode | null {
+  const { exact, partial } = collectNodesByQuery(tree, query);
+  if (exact.length === 1) return exact[0]!;
+  if (exact.length === 0 && partial.length === 1) return partial[0]!;
+  return null;
 }
 
 function treeHasText(tree: A11yNode, text: string): boolean {
