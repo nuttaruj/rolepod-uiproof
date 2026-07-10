@@ -215,6 +215,7 @@ Test infra already exists (vitest, 131 passing). No bootstrap needed. Offline-de
 - **Command:** `npx vitest run tests/smoke/dialog_arming.test.ts`
 
 ### Task 6.5 — (minor) network/cpu throttle persistence + inflight map
+- [~] DEFERRED: throttle-revert-on-detach is unverified ("likely") and a correct fix needs a persistent per-session (page-bound) CDP session; networkInflight is dead (never read). Both minor / non-verdict — tracked as follow-ups, not shipped in PR6.
 - [ ] `src/engine/PlaywrightEngine.ts:870-886` — CDP session is `detach()`ed in `finally` right after applying emulation; verify emulation survives detach (Playwright keeps CDP emulation session-scoped — if it reverts, keep the CDP session on the SessionInternals and detach only on `close`). `:962-968` — `networkInflight` grows and is never pruned/read; prune entries on `requestfinished`/`requestfailed` (the response listener) or drop the map if genuinely unused.
 - **Test:** `tests/smoke/` assert `set_env({networkThrottle:"Slow 3G"})` then a navigation shows throttled timing (bounded, flaky-tolerant), or unit that the inflight map shrinks after a completed request.
 - **Command:** `npx vitest run tests/smoke/v02_surface.test.ts`
@@ -227,33 +228,33 @@ Test infra already exists (vitest, 131 passing). No bootstrap needed. Offline-de
 ## PR7 — Mobile engine (Appium) correctness
 
 ### Task 7.1 — Fix wrong-element locator fallbacks (sibling index used as global index)
-- [ ] `src/engine/AppiumEngine.ts:366-380` (`toSelector`) — iOS class-chain fallback `**/${type}[${classChainIndex}]` and Android `UiSelector().className(cls).instance(${classIndex})` pass a **sibling-scoped** index into a **global** search → resolve the wrong element (2 dims). Also `:362-368` collapses duplicate accessibility-ids/text onto the first match. Fix the index derivation: compute a document-global index when building `MobileRefMeta` (or switch the fallback to a stable predicate — accessibility-id + type + text — rather than positional index), and when a ref is genuinely ambiguous, throw `ambiguous_ref` rather than silently taking `[0]`.
+- [x] `src/engine/AppiumEngine.ts:366-380` (`toSelector`) — iOS class-chain fallback `**/${type}[${classChainIndex}]` and Android `UiSelector().className(cls).instance(${classIndex})` pass a **sibling-scoped** index into a **global** search → resolve the wrong element (2 dims). Also `:362-368` collapses duplicate accessibility-ids/text onto the first match. Fix the index derivation: compute a document-global index when building `MobileRefMeta` (or switch the fallback to a stable predicate — accessibility-id + type + text — rather than positional index), and when a ref is genuinely ambiguous, throw `ambiguous_ref` rather than silently taking `[0]`.
 - **Test:** `tests/unit/` new `appium_selector.test.ts` — build `MobileRefMeta` for the 2nd of two same-class siblings and assert `toSelector` yields a selector that targets the global 2nd (not sibling index applied globally); duplicate a11y-id → `ambiguous_ref`.
 - **Command:** `npx vitest run tests/unit/appium_selector.test.ts`
 
 ### Task 7.2 — `wait_for` on mobile must not re-snapshot pre-wait refs; `ref_exists` must not be a substring text search
-- [ ] `src/engine/AppiumEngine.ts:220-237` — `wait_for` invalidates/re-snapshots internally so a pre-wait ref resolves against a new tree; and `ref_exists` (:227) is implemented as a substring text search → false positives + guaranteed false timeouts. Implement `ref_exists` as a real presence check for the resolved element/predicate; don't invalidate refs the caller is waiting on until the wait resolves.
+- [x] `src/engine/AppiumEngine.ts:220-237` — `wait_for` invalidates/re-snapshots internally so a pre-wait ref resolves against a new tree; and `ref_exists` (:227) is implemented as a substring text search → false positives + guaranteed false timeouts. Implement `ref_exists` as a real presence check for the resolved element/predicate; don't invalidate refs the caller is waiting on until the wait resolves.
 - **Test:** `tests/unit/appium_selector.test.ts` (extend) or a normalizer-level test — `ref_exists` for a present ref returns true without a text match; absent ref → false, not a substring coincidence.
 - **Command:** `npx vitest run tests/unit/appium_selector.test.ts`
 
 ### Task 7.3 — `fillForm` (2+ fields) must survive per-field ref invalidation
-- [ ] `src/engine/AppiumEngine.ts:270-289` — `type()` invalidates refs after each field (:165 etc.), so field 2 throws `stale_ref` and multi-field fills always fail. Re-resolve each field by its predicate/selector at fill time (not by a pre-captured ref), or suppress invalidation within the fillForm batch and invalidate once at the end.
+- [x] `src/engine/AppiumEngine.ts:270-289` — `type()` invalidates refs after each field (:165 etc.), so field 2 throws `stale_ref` and multi-field fills always fail. Re-resolve each field by its predicate/selector at fill time (not by a pre-captured ref), or suppress invalidation within the fillForm batch and invalidate once at the end.
 - **Test:** `tests/unit/` — stub the driver, call `fillForm` with two fields, assert both are typed and no `stale_ref` is thrown.
 - **Command:** `npx vitest run tests/unit/appium_selector.test.ts`
 
 ### Task 7.4 — `scroll` must report real failure, not swallow it as success
-- [ ] `src/engine/AppiumEngine.ts:185-220` — scroll failures are swallowed and reported success; Android gesture rect is hardcoded and iOS "scroll" is actually a swipe. Propagate driver gesture errors as `engine_error`; compute the gesture rect from the element/viewport bounds; document the iOS swipe semantics or implement a real scroll-to-element (`mobile: scroll` with predicate) where available.
+- [x] `src/engine/AppiumEngine.ts:185-220` — scroll failures are swallowed and reported success; Android gesture rect is hardcoded and iOS "scroll" is actually a swipe. Propagate driver gesture errors as `engine_error`; compute the gesture rect from the element/viewport bounds; document the iOS swipe semantics or implement a real scroll-to-element (`mobile: scroll` with predicate) where available.
 - **Test:** `tests/unit/` — stubbed driver whose gesture rejects → `scroll` throws `engine_error` (not `{scrolled:true}`).
 - **Command:** `npx vitest run tests/unit/appium_selector.test.ts`
 
 ### Task 7.5 — a11y snapshots: parse failure must FAIL, not return an empty success; keep `checked`/`visible`
-- [ ] `src/engine/a11y/normalize.ts:133` (web YAML), `xcuitest.ts:47` + `uiautomator2.ts:47` (mobile XML) — a parse failure falls back to `[]` and reports a successful-but-empty tree, so tree-scanning assertions false-pass. On parse error, throw a structured `snapshot_parse_error` (or mark the snapshot `degraded:true`) instead of silently returning `[]`.
+- [x] `src/engine/a11y/normalize.ts:133` (web YAML), `xcuitest.ts:47` + `uiautomator2.ts:47` (mobile XML) — a parse failure falls back to `[]` and reports a successful-but-empty tree, so tree-scanning assertions false-pass. On parse error, throw a structured `snapshot_parse_error` (or mark the snapshot `degraded:true`) instead of silently returning `[]`.
 - [ ] `src/engine/a11y/uiautomator2.ts:~79` — Android normalizer drops `checked`; carry it through so checkbox/switch/toggle state is verifiable. `src/engine/a11y/xcuitest.ts:~81` — iOS normalizer ignores `visible="false"`; carry visibility so `text_visible`/snapshots don't treat off-screen elements as visible.
 - **Test:** `tests/unit/a11y_uiautomator2.test.ts` + `a11y_xcuitest.test.ts` (extend) — (a) malformed XML → throws/degraded, not empty-success; (b) a `checked="true"` node surfaces `checked`; (c) a `visible="false"` node is marked not-visible.
 - **Command:** `npx vitest run tests/unit/a11y_uiautomator2.test.ts tests/unit/a11y_xcuitest.test.ts`
 
 ### Task 7.6 — (minor) actionable error when Appium/device is unavailable
-- [ ] `src/engine/AppiumEngine.ts:~92` — Appium-down/device-not-found surfaces a raw webdriverio error; wrap `remote()` rejection with `engine_error` + guidance ("Appium server unreachable at <url>; start it with `appium` / check device").
+- [x] `src/engine/AppiumEngine.ts:~92` — Appium-down/device-not-found surfaces a raw webdriverio error; wrap `remote()` rejection with `engine_error` + guidance ("Appium server unreachable at <url>; start it with `appium` / check device").
 - **Test:** `tests/unit/` — stub `remote` to reject `ECONNREFUSED` → `open` throws `engine_error` with guidance text.
 - **Command:** `npx vitest run tests/unit/appium_selector.test.ts`
 

@@ -22,6 +22,13 @@ export type AndroidRefMeta = {
   androidClass: string;
   /** 1-based index among siblings of the same android class. */
   classIndex: number;
+  /**
+   * 1-based document-order index among ALL elements of the same class in the
+   * tree. UiSelector.instance(k) indexes globally (0-based), so the
+   * sibling-scoped classIndex resolves the wrong element; this is the index
+   * the selector needs.
+   */
+  globalClassIndex: number;
 };
 
 export type AndroidNormalizedSnapshot = {
@@ -43,11 +50,18 @@ export function parseUiAutomator2Tree(xmlString: string): AndroidNormalizedSnaps
   let counter = 0;
   const nextRef = (): string => `e${++counter}`;
 
+  const globalOcc = new Map<string, number>();
+
   let raw: RawNode[] = [];
   try {
     raw = parser.parse(xmlString) as RawNode[];
-  } catch {
-    raw = [];
+  } catch (err) {
+    // A genuinely malformed source must not become a silent empty-but-
+    // successful snapshot. (Empty input parses to [] without throwing and is
+    // handled by the hierarchy fallback below.)
+    throw new Error(
+      `Failed to parse Android (UiAutomator2) page source: ${(err as Error).message}`,
+    );
   }
 
   const visit = (node: RawNode, siblingOcc: Map<string, number>): A11yNode | null => {
@@ -58,6 +72,8 @@ export function parseUiAutomator2Tree(xmlString: string): AndroidNormalizedSnaps
 
     const idx = (siblingOcc.get(tagName) ?? 0) + 1;
     siblingOcc.set(tagName, idx);
+    const globalIdx = (globalOcc.get(tagName) ?? 0) + 1;
+    globalOcc.set(tagName, globalIdx);
 
     const ref = nextRef();
     refIndex.set(ref, {
@@ -67,6 +83,7 @@ export function parseUiAutomator2Tree(xmlString: string): AndroidNormalizedSnaps
       text: attrs["@text"],
       androidClass: tagName,
       classIndex: idx,
+      globalClassIndex: globalIdx,
     });
 
     const role = simplifyAndroidClass(tagName);
@@ -80,6 +97,8 @@ export function parseUiAutomator2Tree(xmlString: string): AndroidNormalizedSnaps
     if (attrs["@enabled"] === "false") state.disabled = true;
     if (attrs["@focused"] === "true") state.focused = true;
     if (attrs["@selected"] === "true") state.selected = true;
+    // Carry checkbox/switch/toggle state so it is verifiable.
+    if (attrs["@checkable"] === "true") state.checked = attrs["@checked"] === "true";
     if (Object.keys(state).length > 0) a11y.state = state;
 
     if (childrenRaw.length > 0) {

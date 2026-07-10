@@ -89,12 +89,19 @@ export class AppiumEngine implements Engine {
     }
     const remote = await this.loadWdio();
     const caps = this.buildCapabilities(opts);
-    const driver = await remote({
-      hostname: process.env.APPIUM_HOST ?? "127.0.0.1",
-      port: Number(process.env.APPIUM_PORT ?? 4723),
-      path: process.env.APPIUM_BASE_PATH ?? "/",
-      capabilities: caps,
-    });
+    const host = process.env.APPIUM_HOST ?? "127.0.0.1";
+    const port = Number(process.env.APPIUM_PORT ?? 4723);
+    const path = process.env.APPIUM_BASE_PATH ?? "/";
+    let driver: WdioBrowser;
+    try {
+      driver = await remote({ hostname: host, port, path, capabilities: caps });
+    } catch (err) {
+      throw new RolepodMcpError(
+        "engine_error",
+        `Could not start an Appium session (${err instanceof Error ? err.message : String(err)}). Check that the Appium server is running at ${host}:${port}${path} and a ${opts.platform} device/simulator is available and matches the capabilities.`,
+        { platform: opts.platform },
+      );
+    }
 
     const sessionId = randomUUID();
     const session: MobileSession = { id: sessionId, platform: opts.platform, driver };
@@ -201,9 +208,17 @@ export class AppiumEngine implements Engine {
       s.session.platform === "ios"
         ? { direction: dir }
         : { left: 100, top: 200, width: 400, height: 600, direction: dir, percent: amount / 1000 };
-    await s.session.driver
-      .execute(action, params)
-      .catch((err: unknown) => log.warn("scroll gesture failed", { err: String(err) }));
+    try {
+      await s.session.driver.execute(action, params);
+    } catch (err) {
+      // Don't swallow a failed gesture as success — the caller must know the
+      // scroll didn't happen rather than assume the target is now in view.
+      throw new RolepodMcpError(
+        "engine_error",
+        `scroll (${dir}) gesture failed: ${err instanceof Error ? err.message : String(err)}`,
+        { direction: dir },
+      );
+    }
     this.invalidateRefs(s);
   }
 
@@ -220,12 +235,21 @@ export class AppiumEngine implements Engine {
         this.invalidateRefs(s);
         return;
       }
-      const snap = await this.snapshot(session);
+      // Poll on a fresh parse WITHOUT clobbering the session's refIndex /
+      // generation — otherwise a pre-wait ref the caller holds would silently
+      // resolve against a newly-rebuilt tree (positional refs like e5 point at
+      // a different element). After a successful wait the caller re-snapshots.
+      const xml = await s.session.driver.getPageSource();
+      const tree = (
+        s.session.platform === "ios"
+          ? parseXcuiTestTree(xml)
+          : parseUiAutomator2Tree(xml)
+      ).tree;
       const matched =
         cond.kind === "text_visible"
-          ? treeIncludesText(snap.tree, cond.text)
+          ? treeIncludesText(tree, cond.text)
           : cond.kind === "ref_exists"
-            ? treeIncludesText(snap.tree, cond.query)
+            ? treeIncludesText(tree, cond.query)
             : false;
       if (matched) return;
       await s.session.driver.pause(250);
@@ -271,12 +295,17 @@ export class AppiumEngine implements Engine {
     session: Session,
     fields: { ref: string; value: string | boolean; kind?: string }[],
   ): Promise<void> {
-    // Naive port: iterate type() per field. select/checkbox/radio not
-    // applicable in native mobile in the same way; treat all as text input.
+    const s = this.requireSession(session.id);
+    // Resolve + set every field against the SAME snapshot generation and
+    // invalidate once at the end. Calling type() per field would invalidate
+    // refs after field 1, so field 2+ would throw stale_ref (multi-field
+    // fills always failed).
     for (const f of fields) {
+      const el = await this.resolveElement(s, f.ref);
       const v = typeof f.value === "boolean" ? String(f.value) : f.value;
-      await this.type(session, f.ref, v);
+      await el.setValue(v);
     }
+    this.invalidateRefs(s);
   }
 
   async uploadFile(
@@ -366,7 +395,9 @@ export class AppiumEngine implements Engine {
   private toSelector(meta: MobileRefMeta): string {
     if (meta.kind === "ios") {
       if (meta.accessibilityId) return `~${meta.accessibilityId}`;
-      const chain = `**/${meta.type}[${meta.classChainIndex}]`;
+      // Global class-chain index — a class-chain query matches the nth element
+      // of a type across the whole tree, not among siblings.
+      const chain = `**/${meta.type}[${meta.globalTypeIndex}]`;
       return `-ios class chain:${chain}`;
     }
     if (meta.resourceId) {
@@ -376,7 +407,9 @@ export class AppiumEngine implements Engine {
     if (meta.text) {
       return `-android uiautomator:new UiSelector().text("${escape(meta.text)}")`;
     }
-    return `-android uiautomator:new UiSelector().className("${meta.androidClass}").instance(${meta.classIndex - 1})`;
+    // UiSelector.instance(k) is a global 0-based index over all elements of the
+    // class — use the global index, not the sibling-scoped one.
+    return `-android uiautomator:new UiSelector().className("${meta.androidClass}").instance(${meta.globalClassIndex - 1})`;
   }
 
   private invalidateRefs(s: SessionInternals): void {

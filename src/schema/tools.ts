@@ -24,6 +24,10 @@ export const a11yStateSchema = z.object({
   selected: z.boolean().optional(),
   expanded: z.boolean().optional(),
   disabled: z.boolean().optional(),
+  /** Checkbox/switch/toggle state (mobile). */
+  checked: z.boolean().optional(),
+  /** On-screen visibility (mobile XCUITest `visible`). */
+  visible: z.boolean().optional(),
 });
 
 export type A11yNode = {
