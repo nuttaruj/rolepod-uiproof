@@ -6,6 +6,8 @@ import { ArtifactStore } from "../../src/artifact/ArtifactStore.js";
 import { PlaywrightEngine } from "../../src/engine/PlaywrightEngine.js";
 import { SessionRegistry } from "../../src/session/SessionRegistry.js";
 import { verifyUiFlowTool } from "../../src/tools/composite/verify_ui_flow.js";
+import { exampleComReachable } from "./_net.js";
+const ONLINE = await exampleComReachable();
 import type { ToolContext } from "../../src/tools/types.js";
 
 const EXAMPLE_URL = "https://example.com";
@@ -30,7 +32,7 @@ afterAll(async () => {
   rmSync(tmpRoot, { recursive: true, force: true });
 });
 
-describe("PlaywrightEngine — direct", () => {
+describe.skipIf(!ONLINE)("PlaywrightEngine — direct", () => {
   let leftoverSession: { id: string; platform: "web" } | null = null;
 
   afterEach(async () => {
@@ -80,7 +82,7 @@ describe("PlaywrightEngine — direct", () => {
   });
 });
 
-describe("verify_ui_flow — composite", () => {
+describe.skipIf(!ONLINE)("verify_ui_flow — composite", () => {
   it("passes when expected text is on the page", async () => {
     const handler = verifyUiFlowTool.build(ctx);
     const result = await handler({

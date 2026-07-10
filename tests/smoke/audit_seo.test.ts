@@ -6,6 +6,8 @@ import { ArtifactStore } from "../../src/artifact/ArtifactStore.js";
 import { PlaywrightEngine } from "../../src/engine/PlaywrightEngine.js";
 import { SessionRegistry } from "../../src/session/SessionRegistry.js";
 import { auditSeoTool } from "../../src/tools/composite/audit_seo.js";
+import { exampleComReachable } from "./_net.js";
+const ONLINE = await exampleComReachable();
 import type { ToolContext } from "../../src/tools/types.js";
 
 let tmpRoot: string;
@@ -27,7 +29,7 @@ afterAll(async () => {
   rmSync(tmpRoot, { recursive: true, force: true });
 });
 
-describe("audit_seo — status capture + render", () => {
+describe.skipIf(!ONLINE)("audit_seo — status capture + render", () => {
   it("captures HTTP status and final URL for a real page", async () => {
     const handler = auditSeoTool.build(ctx);
     const result = await handler({

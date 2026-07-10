@@ -75,6 +75,7 @@ const expected = [
   "browser_evaluate",
   "browser_pages",
   "browser_switch_page",
+  "extract_computed_style",
   // composite (5)
   "verify_ui_flow",
   "audit_a11y",
@@ -87,8 +88,14 @@ const expected = [
   "audit_seo",
 ];
 const missing = expected.filter((n) => !names.includes(n));
-if (missing.length) {
-  console.error("MISSING:", missing);
+const extra = names.filter((n) => !expected.includes(n));
+if (missing.length || extra.length) {
+  if (missing.length) console.error("MISSING:", missing);
+  if (extra.length) console.error("UNEXPECTED:", extra);
+  process.exit(1);
+}
+if (names.length !== expected.length) {
+  console.error(`COUNT mismatch: advertised ${names.length}, expected ${expected.length}`);
   process.exit(1);
 }
 

@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PlaywrightEngine } from "../../src/engine/PlaywrightEngine.js";
+import { exampleComReachable } from "./_net.js";
+const ONLINE = await exampleComReachable();
 import { SessionRegistry } from "../../src/session/SessionRegistry.js";
 
 const EXAMPLE_URL = "https://example.com";
@@ -25,7 +27,7 @@ afterAll(async () => {
   rmSync(tmpRoot, { recursive: true, force: true });
 });
 
-describe("open() failure does not leak a browser", () => {
+describe.skipIf(!ONLINE)("open() failure does not leak a browser", () => {
   it("rejects when the initial navigation fails (closed port)", async () => {
     // Port 1 is never listening → goto rejects; the engine must close the
     // browser it launched rather than leak it.
@@ -35,7 +37,7 @@ describe("open() failure does not leak a browser", () => {
   });
 });
 
-describe("closed pages are pruned from the session", () => {
+describe.skipIf(!ONLINE)("closed pages are pruned from the session", () => {
   it("removes a closed popup and keeps activePageIndex valid", async () => {
     const session = await registry.open({ platform: "web", url: EXAMPLE_URL, headless: true });
     const page = engine.getPageForSession(session.id);
@@ -54,7 +56,7 @@ describe("closed pages are pruned from the session", () => {
   });
 });
 
-describe("handle_dialog arms and returns immediately (non-wait)", () => {
+describe.skipIf(!ONLINE)("handle_dialog arms and returns immediately (non-wait)", () => {
   it("accepts the next confirm() without blocking and records last_dialog", async () => {
     const session = await registry.open({ platform: "web", url: EXAMPLE_URL, headless: true });
     const page = engine.getPageForSession(session.id);

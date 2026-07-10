@@ -17,6 +17,8 @@ import { browserScreenshotTool } from "../../src/tools/atomic/browser_screenshot
 import { browserScrollTool } from "../../src/tools/atomic/browser_scroll.js";
 import { browserWaitForTool } from "../../src/tools/atomic/browser_wait_for.js";
 import { browserCloseTool } from "../../src/tools/atomic/browser_close.js";
+import { exampleComReachable } from "./_net.js";
+const ONLINE = await exampleComReachable();
 import type { ToolContext } from "../../src/tools/types.js";
 
 const EXAMPLE_URL = "https://example.com";
@@ -44,7 +46,7 @@ afterAll(async () => {
 // new atomic tools — surface check
 // ---------------------------------------------------------------------------
 
-describe("new atomic tools", () => {
+describe.skipIf(!ONLINE)("new atomic tools", () => {
   it("browser_key + browser_scroll + browser_wait_for + browser_screenshot + browser_navigate work in sequence", async () => {
     const open = browserOpenTool.build(ctx);
     const opened = await open({ platform: "web", url: EXAMPLE_URL, headless: true });
@@ -87,7 +89,7 @@ describe("new atomic tools", () => {
 // audit_a11y — example.com is mostly clean but axe always returns a result
 // ---------------------------------------------------------------------------
 
-describe("audit_a11y", () => {
+describe.skipIf(!ONLINE)("audit_a11y", () => {
   it("runs an axe audit and writes a report", async () => {
     const handler = auditA11yTool.build(ctx);
     const result = await handler({
@@ -123,7 +125,7 @@ describe("audit_a11y", () => {
 // visual_diff — first call seeds, second matches
 // ---------------------------------------------------------------------------
 
-describe("visual_diff", () => {
+describe.skipIf(!ONLINE)("visual_diff", () => {
   it("seeds a baseline on first call then diffs near-zero on second", async () => {
     const handler = visualDiffTool.build(ctx);
     const baselineId = `smoke-${Date.now()}`;
@@ -171,7 +173,7 @@ describe("visual_diff", () => {
 // scaffold_e2e — pure codegen, no browser
 // ---------------------------------------------------------------------------
 
-describe("scaffold_e2e", () => {
+describe.skipIf(!ONLINE)("scaffold_e2e", () => {
   it("generates a playwright-test file from a scenario", async () => {
     const handler = scaffoldE2eTool.build(ctx);
     const result = await handler({
@@ -246,7 +248,7 @@ describe("scaffold_e2e", () => {
 // extract_ui_state
 // ---------------------------------------------------------------------------
 
-describe("extract_ui_state", () => {
+describe.skipIf(!ONLINE)("extract_ui_state", () => {
   it("returns matched subtree and refs for a question about the heading", async () => {
     const handler = extractUiStateTool.build(ctx);
     const result = await handler({
@@ -269,7 +271,7 @@ describe("extract_ui_state", () => {
 // verify_ui_flow mode='reproduce' + minimization
 // ---------------------------------------------------------------------------
 
-describe("verify_ui_flow mode='reproduce' with minimization", () => {
+describe.skipIf(!ONLINE)("verify_ui_flow mode='reproduce' with minimization", () => {
   it("removes redundant steps and writes replay-minimized.json", async () => {
     const handler = verifyUiFlowTool.build(ctx);
     const result = await handler({

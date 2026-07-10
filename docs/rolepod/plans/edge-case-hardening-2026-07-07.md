@@ -266,23 +266,23 @@ Test infra already exists (vitest, 131 passing). No bootstrap needed. Offline-de
 ## PR8 — Test coverage backfill (regression floor)
 
 ### Task 8.1 — Fix the handshake expected-tool list (29 → 30)
-- [ ] `tests/smoke/mcp_handshake.mjs:~54` — expected-tool list omits `extract_computed_style` (29 vs 30 registered). Add it so the smoke asserts the full surface.
+- [x] `tests/smoke/mcp_handshake.mjs:~54` — expected-tool list omits `extract_computed_style` (29 vs 30 registered). Add it so the smoke asserts the full surface.
 - **Command:** `npm run smoke:mcp`
 
 ### Task 8.2 — Offline-skip for network-dependent smoke suites
-- [ ] `tests/smoke/example_com.test.ts:11` (+ 3 other suites hard-depending on `https://example.com`) — add a reachability pre-check that `skip`s (not fails) when offline/example.com unreachable, so CI/offline runs don't false-red. Keep them running when online.
+- [x] `tests/smoke/example_com.test.ts:11` (+ 3 other suites hard-depending on `https://example.com`) — add a reachability pre-check that `skip`s (not fails) when offline/example.com unreachable, so CI/offline runs don't false-red. Keep them running when online.
 - **Command:** `npx vitest run tests/smoke`
 
 ### Task 8.3 — Direct unit for the MCP error contract
-- [ ] `src/tools/result.ts:20` + `src/util/errors.ts` — no direct test for `failure()`/`safeHandler` mapping. Add `tests/unit/error_contract.test.ts` asserting: a thrown `RolepodMcpError` keeps its code; a plain `Error` degrades to `engine_error`; the result shape is `{isError:true, code, message}`.
+- [x] `src/tools/result.ts:20` + `src/util/errors.ts` — no direct test for `failure()`/`safeHandler` mapping. Add `tests/unit/error_contract.test.ts` asserting: a thrown `RolepodMcpError` keeps its code; a plain `Error` degrades to `engine_error`; the result shape is `{isError:true, code, message}`.
 - **Command:** `npx vitest run tests/unit/error_contract.test.ts`
 
 ### Task 8.4 — Handler-level smoke for the untested composites + SessionRegistry lifecycle
-- [ ] Add handler-execution coverage (not just helpers) for `measure_cwv`, `audit_page_budget`, `audit_seo` (0 runtime coverage today), and a `SessionRegistry` lifecycle test (idle sweep, close-then-reuse, concurrent sessions) — `src/session/SessionRegistry.ts:93`. Many of these are satisfied by tests written in PRs 4/5/7; this task closes whatever remains.
+- [x] Add handler-execution coverage (not just helpers) for `measure_cwv`, `audit_page_budget`, `audit_seo` (0 runtime coverage today), and a `SessionRegistry` lifecycle test (idle sweep, close-then-reuse, concurrent sessions) — `src/session/SessionRegistry.ts:93`. Many of these are satisfied by tests written in PRs 4/5/7; this task closes whatever remains.
 - **Command:** `npx vitest run tests/unit tests/smoke`
 
 ### Task 8.5 — Extension-Protocol manifest emission test
-- [ ] `src/util/manifest.ts:54` — parent `check-work` parses this shape; add `tests/unit/manifest_shape.test.ts` asserting a composite run emits a manifest with the v1 fields (`skill, phase, status, artifacts[]`).
+- [x] `src/util/manifest.ts:54` — parent `check-work` parses this shape; add `tests/unit/manifest_shape.test.ts` asserting a composite run emits a manifest with the v1 fields (`skill, phase, status, artifacts[]`).
 - **Command:** `npx vitest run tests/unit/manifest_shape.test.ts`
 
 ### Task 8.6 — PR8 gate + full suite
