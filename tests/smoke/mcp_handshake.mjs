@@ -75,6 +75,7 @@ const expected = [
   "browser_evaluate",
   "browser_pages",
   "browser_switch_page",
+  "extract_computed_style",
   // composite (5)
   "verify_ui_flow",
   "audit_a11y",
@@ -87,10 +88,29 @@ const expected = [
   "audit_seo",
 ];
 const missing = expected.filter((n) => !names.includes(n));
-if (missing.length) {
-  console.error("MISSING:", missing);
+const extra = names.filter((n) => !expected.includes(n));
+if (missing.length || extra.length) {
+  if (missing.length) console.error("MISSING:", missing);
+  if (extra.length) console.error("UNEXPECTED:", extra);
   process.exit(1);
 }
+if (names.length !== expected.length) {
+  console.error(`COUNT mismatch: advertised ${names.length}, expected ${expected.length}`);
+  process.exit(1);
+}
+
+// Strict input schema: an unknown top-level key must be rejected, not silently
+// stripped (a typo'd param used to drop to a default and mislead).
+const strictResp = await call("tools/call", {
+  name: "browser_close",
+  arguments: { session_id: "nope", bogus_unknown_key: 1 },
+});
+const strictText = JSON.stringify(strictResp);
+if (!/unrecognized|bogus_unknown_key/i.test(strictText)) {
+  console.error("STRICT schema not enforced — unknown key was not rejected:", strictText.slice(0, 300));
+  process.exit(1);
+}
+console.log("[strict] unknown top-level key rejected");
 
 console.log("OK");
 child.kill("SIGTERM");

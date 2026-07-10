@@ -1,8 +1,9 @@
 import { existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { homedir, platform as osPlatform } from "node:os";
+import { chromium } from "playwright";
 
-type Check = {
+export type Check = {
   name: string;
   status: "ok" | "warn" | "fail";
   detail: string;
@@ -57,24 +58,44 @@ export async function runDoctor(): Promise<number> {
 }
 
 function checkPlaywrightChromium(): Check {
-  const candidates = [
-    join(homedir(), "Library", "Caches", "ms-playwright"),
-    join(homedir(), ".cache", "ms-playwright"),
-    process.env.PLAYWRIGHT_BROWSERS_PATH,
-  ].filter((x): x is string => typeof x === "string");
-  for (const base of candidates) {
-    if (existsSync(base)) {
-      return {
-        name: "Playwright Chromium installed",
-        status: "ok",
-        detail: base,
-      };
-    }
+  // Ask Playwright where the browser actually is instead of guessing cache
+  // dirs — the old dir-exists heuristic gave false OK (dir present, chromium
+  // absent), false FAIL on Windows (different path), and false FAIL under
+  // PLAYWRIGHT_BROWSERS_PATH=0 (browsers bundled with the package).
+  let exe: string | null = null;
+  let err: unknown;
+  try {
+    exe = chromium.executablePath();
+  } catch (e) {
+    err = e;
+  }
+  return classifyPlaywrightExe(exe, err, (p) => existsSync(p));
+}
+
+/**
+ * Pure classifier for the Chromium executable probe — split out so it can be
+ * unit-tested without a real Playwright install.
+ */
+export function classifyPlaywrightExe(
+  exe: string | null,
+  err: unknown,
+  exists: (p: string) => boolean,
+): Check {
+  const name = "Playwright Chromium installed";
+  if (err) {
+    return {
+      name,
+      status: "warn",
+      detail: `Could not resolve Chromium path (${String(err)}) — run: npx playwright install chromium`,
+    };
+  }
+  if (exe && exists(exe)) {
+    return { name, status: "ok", detail: exe };
   }
   return {
-    name: "Playwright Chromium installed",
+    name,
     status: "fail",
-    detail: "Run: npx playwright install chromium",
+    detail: `Chromium not found${exe ? ` at ${exe}` : ""} — run: npx playwright install chromium`,
   };
 }
 

@@ -25,6 +25,27 @@ function cropTopLeft(src: PNG, w: number, h: number): PNG {
   return out;
 }
 
+/**
+ * True when a PNG is empty or a single solid colour — the signature of a
+ * broken / unloaded page. Refusing to seed a baseline from such a capture
+ * stops a bad baseline from poisoning every future diff.
+ */
+export function isBlankPng(buf: Buffer): boolean {
+  const png = PNG.sync.read(buf);
+  if (png.width === 0 || png.height === 0) return true;
+  const d = png.data;
+  const r = d[0];
+  const g = d[1];
+  const b = d[2];
+  const a = d[3];
+  for (let i = 4; i < d.length; i += 4) {
+    if (d[i] !== r || d[i + 1] !== g || d[i + 2] !== b || d[i + 3] !== a) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export const visualDiffTool: ToolModule<typeof visualDiffShape> = {
   name: ToolNames.visualDiff,
   description:
@@ -68,6 +89,16 @@ export const visualDiffTool: ToolModule<typeof visualDiffShape> = {
         );
 
         if (!existsSync(baselinePath)) {
+          // Only guard full-page seeds: a broken/unloaded page renders as one
+          // solid colour. A region capture (`selector`) of a solid element
+          // (a coloured button/box) is legitimately single-colour, so skip it.
+          if (!args.selector && isBlankPng(buf)) {
+            throw new RolepodMcpError(
+              "invalid_input",
+              `Refusing to seed baseline "${args.baseline_id}" from a blank / solid-colour full-page capture — verify the URL actually renders content before baselining (a broken or unloaded page must not become the baseline).`,
+              { baseline_id: args.baseline_id },
+            );
+          }
           await ctx.store.writeBytes(
             ctx.store.baselineDir,
             `${args.baseline_id}.png`,
@@ -97,10 +128,11 @@ export const visualDiffTool: ToolModule<typeof visualDiffShape> = {
             baseline_id: args.baseline_id,
             diff_pct: 0,
             passed: true,
+            baseline_created: true,
             baseline_path: baselinePath,
             current_path: currentPath,
             ...(manifestPath ? { manifest: manifestPath } : {}),
-            note: "Baseline did not exist — current capture saved as the new baseline.",
+            note: "Baseline did not exist — current capture saved as the new baseline. Re-run to diff against it.",
           });
         }
 

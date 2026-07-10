@@ -12,6 +12,7 @@ import {
   type Request,
   type Response,
   type Dialog,
+  type CDPSession,
 } from "playwright";
 import {
   RolepodMcpError,
@@ -33,6 +34,34 @@ import type {
   Session,
   WaitCondition,
 } from "./Engine.js";
+
+/**
+ * Headless is the safe default — display-less CI, servers, and containers
+ * cannot launch a headed browser. Opt into a visible browser with
+ * `ROLEPOD_HEADED=1`.
+ */
+export function resolveHeadless(env: NodeJS.ProcessEnv): boolean {
+  return env.ROLEPOD_HEADED !== "1";
+}
+
+/**
+ * Map Playwright's actionability TimeoutError to a classified engine_error so a
+ * hidden/disabled/detached/covered target reads as "not actionable" instead of
+ * a raw stack after a stall. Returns null for any other error (rethrow as-is).
+ */
+export function classifyActionTimeout(
+  what: string,
+  err: unknown,
+): RolepodMcpError | null {
+  if (err instanceof Error && err.name === "TimeoutError") {
+    return new RolepodMcpError(
+      "engine_error",
+      `${what} timed out — the target element is likely not actionable (hidden, disabled, detached, or covered by another element). Set ROLEPOD_ACTION_TIMEOUT_MS to fail faster. (${err.message.split("\n")[0]})`,
+      { action: what },
+    );
+  }
+  return null;
+}
 
 type WebSession = Session & {
   readonly platform: "web";
@@ -68,6 +97,14 @@ type DialogArming = {
   resolve: (handled: boolean) => void;
 };
 
+export type DialogInfo = {
+  type: string;
+  message: string;
+  action: "accept" | "dismiss" | "accept_with_text" | "auto_dismiss";
+  handled: boolean;
+  at: string;
+};
+
 type SessionInternals = {
   session: WebSession;
   refIndex: Map<string, RefMeta>;
@@ -80,9 +117,13 @@ type SessionInternals = {
   activePageIndex: number;
   consoleBuffer: ConsoleEntry[];
   networkBuffer: NetworkEntry[];
-  networkInflight: Map<string, { id: number; startedAt: number; resourceType: string }>;
   networkNextId: number;
+  /** Persistent CDP session for network/CPU throttle — detaching reverts the
+   * emulation, so it is kept alive until close() (rebound if the page changes). */
+  cdpSession: CDPSession | null;
+  cdpPage: Page | null;
   dialogArming: DialogArming | null;
+  lastDialog: DialogInfo | null;
   captureOpts: NonNullable<OpenOptions["capture"]> | undefined;
   traceStarted: boolean;
 };
@@ -202,7 +243,7 @@ export class PlaywrightEngine implements Engine {
           ? webkit
           : chromium;
 
-    const headless = opts.headless ?? (process.env.CI ? true : false);
+    const headless = opts.headless ?? resolveHeadless(process.env);
     const browser = await launcher.launch({ headless });
 
     const contextOptions: Parameters<typeof browser.newContext>[0] = {};
@@ -257,9 +298,11 @@ export class PlaywrightEngine implements Engine {
       activePageIndex: 0,
       consoleBuffer: [],
       networkBuffer: [],
-      networkInflight: new Map(),
       networkNextId: 1,
+      cdpSession: null,
+      cdpPage: null,
       dialogArming: null,
+      lastDialog: null,
       captureOpts: opts.capture,
       traceStarted: !!opts.capture?.trace,
     };
@@ -271,7 +314,15 @@ export class PlaywrightEngine implements Engine {
     });
 
     if (opts.url) {
-      await page.goto(opts.url, { waitUntil: "domcontentloaded" });
+      try {
+        await page.goto(opts.url, { waitUntil: "domcontentloaded" });
+      } catch (err) {
+        // The browser launched but the initial navigation failed (dead URL,
+        // down localhost, redirect loop). Close it so a session that never
+        // opened doesn't leak a live browser process.
+        await browser.close().catch(() => undefined);
+        throw err;
+      }
     }
 
     this.sessions.set(sessionId, internals);
@@ -304,6 +355,10 @@ export class PlaywrightEngine implements Engine {
         });
     }
 
+    if (s.cdpSession) {
+      await s.cdpSession.detach().catch(() => undefined);
+      s.cdpSession = null;
+    }
     await s.session.context.close().catch((err: unknown) => {
       log.warn("context close failed", { session_id: session.id, err: String(err) });
     });
@@ -340,6 +395,32 @@ export class PlaywrightEngine implements Engine {
     };
   }
 
+  /**
+   * Per-action timeout override (ms) via `ROLEPOD_ACTION_TIMEOUT_MS`. Lets a
+   * caller fail fast on a non-actionable element instead of waiting out
+   * Playwright's 30s default. Absent → Playwright default.
+   */
+  private actionTimeout(): { timeout: number } | undefined {
+    const raw = process.env.ROLEPOD_ACTION_TIMEOUT_MS;
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) && n > 0 ? { timeout: n } : undefined;
+  }
+
+  /**
+   * Run an interaction and classify Playwright's actionability TimeoutError
+   * into a clear, actionable engine_error, instead of surfacing a raw stack
+   * after a 30s stall on a hidden/disabled/detached/covered element.
+   */
+  private async runAction<T>(what: string, fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (err) {
+      const classified = classifyActionTimeout(what, err);
+      if (classified) throw classified;
+      throw err;
+    }
+  }
+
   async click(
     session: Session,
     ref: string,
@@ -347,7 +428,12 @@ export class PlaywrightEngine implements Engine {
   ): Promise<void> {
     const s = this.requireSession(session.id);
     const locator = this.resolveLocator(s, ref);
-    await locator.click(opts?.button ? { button: opts.button } : undefined);
+    await this.runAction("click", () =>
+      locator.click({
+        ...(opts?.button ? { button: opts.button } : {}),
+        ...(this.actionTimeout() ?? {}),
+      }),
+    );
     this.invalidateRefs(s);
   }
 
@@ -359,8 +445,10 @@ export class PlaywrightEngine implements Engine {
   ): Promise<void> {
     const s = this.requireSession(session.id);
     const locator = this.resolveLocator(s, ref);
-    if (opts?.clearFirst) await locator.fill("");
-    await locator.fill(text);
+    if (opts?.clearFirst) {
+      await this.runAction("type", () => locator.fill("", this.actionTimeout()));
+    }
+    await this.runAction("type", () => locator.fill(text, this.actionTimeout()));
     this.invalidateRefs(s);
   }
 
@@ -406,10 +494,16 @@ export class PlaywrightEngine implements Engine {
           .waitFor({ state: "visible", timeout: timeoutMs });
         break;
       case "ref_exists":
+        // Role-agnostic: wait for ANY element whose accessible text matches the
+        // query, not just a button, so `ref_exists` no longer falsely times out
+        // for links, inputs, headings, etc. Wait for `visible` (not merely
+        // `attached`) so a hidden duplicate (e.g. a display:none responsive-nav
+        // copy earlier in the DOM) can't satisfy the wait before the real,
+        // visible element renders.
         await page
-          .getByRole("button", { name: cond.query })
+          .getByText(cond.query, { exact: false })
           .first()
-          .waitFor({ state: "attached", timeout: timeoutMs });
+          .waitFor({ state: "visible", timeout: timeoutMs });
         break;
       case "url_matches":
         await page.waitForURL(new RegExp(cond.pattern), { timeout: timeoutMs });
@@ -626,7 +720,7 @@ export class PlaywrightEngine implements Engine {
   async hover(session: Session, ref: string): Promise<void> {
     const s = this.requireSession(session.id);
     const locator = this.resolveLocator(s, ref);
-    await locator.hover();
+    await this.runAction("hover", () => locator.hover(this.actionTimeout()));
     // Hover does not modify DOM in the same way click does; keep refs valid.
   }
 
@@ -638,7 +732,7 @@ export class PlaywrightEngine implements Engine {
     const s = this.requireSession(session.id);
     const from = this.resolveLocator(s, fromRef);
     const to = this.resolveLocator(s, toRef);
-    await from.dragTo(to);
+    await this.runAction("drag", () => from.dragTo(to, this.actionTimeout()));
     this.invalidateRefs(s);
   }
 
@@ -647,16 +741,19 @@ export class PlaywrightEngine implements Engine {
     for (const field of fields) {
       const locator = this.resolveLocator(s, field.ref);
       const kind = field.kind;
+      const t = this.actionTimeout();
       if (kind === "checkbox" || kind === "radio") {
         const checked = typeof field.value === "boolean"
           ? field.value
           : field.value === "true" || field.value === "on";
-        await locator.setChecked(checked);
+        await this.runAction("fill_form", () => locator.setChecked(checked, t));
       } else if (kind === "select") {
-        await locator.selectOption(String(field.value));
+        await this.runAction("fill_form", () =>
+          locator.selectOption(String(field.value), t),
+        );
       } else {
         // input / textarea / contenteditable
-        await locator.fill(String(field.value));
+        await this.runAction("fill_form", () => locator.fill(String(field.value), t));
       }
     }
     this.invalidateRefs(s);
@@ -676,7 +773,9 @@ export class PlaywrightEngine implements Engine {
       );
     }
     const locator = this.resolveLocator(s, ref);
-    await locator.setInputFiles(filePath);
+    await this.runAction("upload", () =>
+      locator.setInputFiles(filePath, this.actionTimeout()),
+    );
     this.invalidateRefs(s);
   }
 
@@ -697,8 +796,9 @@ export class PlaywrightEngine implements Engine {
       action: "accept" | "dismiss" | "accept_with_text";
       text?: string;
       timeoutMs?: number;
+      wait?: boolean;
     },
-  ): Promise<{ handled: boolean }> {
+  ): Promise<{ handled: boolean; armed?: boolean; last_dialog?: DialogInfo | null }> {
     const s = this.requireSession(sessionId);
     const timeoutMs = opts.timeoutMs ?? 30_000;
     const expiresAt = Date.now() + timeoutMs;
@@ -707,6 +807,24 @@ export class PlaywrightEngine implements Engine {
     // replacement.
     if (s.dialogArming) {
       s.dialogArming.resolve(false);
+    }
+
+    if (!opts.wait) {
+      // Default: arm and return immediately so a sequential MCP client can
+      // issue the triggering action next (a blocking wait would deadlock —
+      // the client can't fire the dialog while this call is pending). The
+      // page.on("dialog") consumer handles the next dialog; its outcome
+      // surfaces as `last_dialog`. handlePageDialog's expiresAt check auto-
+      // expires a stale arming.
+      s.dialogArming = {
+        action: opts.action,
+        text: opts.text,
+        expiresAt,
+        resolve: () => {
+          s.dialogArming = null;
+        },
+      };
+      return { armed: true, handled: false, last_dialog: s.lastDialog };
     }
 
     return new Promise<{ handled: boolean }>((resolve) => {
@@ -866,20 +984,28 @@ export class PlaywrightEngine implements Engine {
           `networkThrottle / cpuThrottle require chromium (CDP-backed); current browser is "${browserName}".`,
         );
       }
-      const cdp = await ctx.newCDPSession(page);
-      try {
-        if (opts.networkThrottle) {
-          const preset = NETWORK_PRESETS[opts.networkThrottle];
-          await cdp.send("Network.enable");
-          await cdp.send("Network.emulateNetworkConditions", preset);
-        }
-        if (opts.cpuThrottle !== undefined) {
-          await cdp.send("Emulation.setCPUThrottlingRate", {
-            rate: opts.cpuThrottle,
-          });
-        }
-      } finally {
-        await cdp.detach().catch(() => undefined);
+      // Keep the CDP session attached — detaching reverts the emulation, so
+      // the previous code applied a throttle that immediately snapped back.
+      // Reuse one persistent session per web session; rebind if the active
+      // page changed; detach happens in close().
+      if (s.cdpSession && s.cdpPage !== page) {
+        await s.cdpSession.detach().catch(() => undefined);
+        s.cdpSession = null;
+      }
+      if (!s.cdpSession) {
+        s.cdpSession = await ctx.newCDPSession(page);
+        s.cdpPage = page;
+      }
+      const cdp = s.cdpSession;
+      if (opts.networkThrottle) {
+        const preset = NETWORK_PRESETS[opts.networkThrottle];
+        await cdp.send("Network.enable");
+        await cdp.send("Network.emulateNetworkConditions", preset);
+      }
+      if (opts.cpuThrottle !== undefined) {
+        await cdp.send("Emulation.setCPUThrottlingRate", {
+          rate: opts.cpuThrottle,
+        });
       }
     }
     this.invalidateRefs(s);
@@ -961,12 +1087,7 @@ export class PlaywrightEngine implements Engine {
 
     page.on("request", (req: Request) => {
       const id = s.networkNextId++;
-      s.networkInflight.set(req.url() + "::" + req.method() + "::" + id, {
-        id,
-        startedAt: Date.now(),
-        resourceType: req.resourceType(),
-      });
-      // Optimistic entry — will be updated on response/failed.
+      // Optimistic entry — updated on response/failed.
       pushRing(
         s.networkBuffer,
         {
@@ -999,16 +1120,34 @@ export class PlaywrightEngine implements Engine {
     page.on("dialog", (dialog: Dialog) => {
       void this.handlePageDialog(s, dialog);
     });
+
+    // Prune a page from the session when it closes so listPages/switch_page
+    // never operate on a dead tab, and activePageIndex never dangles.
+    page.on("close", () => {
+      const idx = s.pages.indexOf(page);
+      if (idx === -1) return;
+      s.pages.splice(idx, 1);
+      if (idx < s.activePageIndex) {
+        s.activePageIndex -= 1;
+      } else if (idx === s.activePageIndex) {
+        s.activePageIndex = Math.min(s.activePageIndex, s.pages.length - 1);
+      }
+      if (s.activePageIndex < 0) s.activePageIndex = 0;
+    });
   }
 
   private async handlePageDialog(
     s: SessionInternals,
     dialog: Dialog,
   ): Promise<void> {
+    const type = dialog.type();
+    const message = dialog.message();
+    const at = new Date().toISOString();
     const arm = s.dialogArming;
     if (!arm || Date.now() > arm.expiresAt) {
       // Nothing armed → auto-dismiss so the page does not hang.
       await dialog.dismiss().catch(() => undefined);
+      s.lastDialog = { type, message, action: "auto_dismiss", handled: false, at };
       if (arm) arm.resolve(false);
       return;
     }
@@ -1020,8 +1159,10 @@ export class PlaywrightEngine implements Engine {
       } else {
         await dialog.dismiss();
       }
+      s.lastDialog = { type, message, action: arm.action, handled: true, at };
       arm.resolve(true);
     } catch (err) {
+      s.lastDialog = { type, message, action: arm.action, handled: false, at };
       log.warn("dialog handle failed", {
         session_id: s.session.id,
         err: String(err),

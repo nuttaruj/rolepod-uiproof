@@ -23,7 +23,7 @@ type Finding = {
   evidence?: string;
 };
 
-type SeoSnapshot = {
+export type SeoSnapshot = {
   title: string | null;
   meta_description: string | null;
   h1_texts: string[];
@@ -67,9 +67,10 @@ export const auditSeoTool: ToolModule<typeof auditSeoShape> = {
         skill: "audit-seo",
       });
 
+      // Open without a URL so the navigation below returns a Response we can
+      // read the HTTP status from (registry.open discards it).
       const openOpts: OpenOptions = {
         platform: "web",
-        url: args.url,
         browser: args.browser ?? "chromium",
         viewport: args.viewport,
       };
@@ -85,11 +86,34 @@ export const auditSeoTool: ToolModule<typeof auditSeoShape> = {
 
       let findings: Finding[] = [];
       let snapshot: SeoSnapshot | null = null;
+      let httpStatus = 0;
+      let finalUrl = args.url;
       try {
         const page = engine.getPageForSession(session.id);
-        await page.waitForLoadState("domcontentloaded");
-        snapshot = await page.evaluate(extractSeoSnapshot);
-        findings = runSeoRules(snapshot, checks);
+        const resp = await page.goto(args.url, { waitUntil: "load" });
+        httpStatus = resp?.status() ?? 0;
+        finalUrl = page.url();
+        if (httpStatus >= 400) {
+          // Don't audit an error page (404/500) as if it were the requested
+          // page — every SEO rule would fire against the error body.
+          findings = [
+            {
+              check: "http_status",
+              severity: "critical",
+              message: `Requested URL returned HTTP ${httpStatus}`,
+              evidence: finalUrl,
+            },
+          ];
+        } else {
+          // Give client-rendered (SPA) pages a bounded chance to paint before
+          // reading the DOM — reading at domcontentloaded reported false
+          // missing title/meta on React/Vue/Next apps.
+          await page
+            .waitForLoadState("networkidle", { timeout: 3000 })
+            .catch(() => undefined);
+          snapshot = await page.evaluate(extractSeoSnapshot);
+          findings = runSeoRules(snapshot, checks);
+        }
       } finally {
         if (args.close_on_finish) {
           await ctx.registry.close(session).catch(() => undefined);
@@ -104,6 +128,8 @@ export const auditSeoTool: ToolModule<typeof auditSeoShape> = {
       const payload = {
         run_id: runId,
         url: args.url,
+        final_url: finalUrl,
+        http_status: httpStatus,
         checks: [...checks],
         counts,
         findings,
@@ -147,6 +173,8 @@ export const auditSeoTool: ToolModule<typeof auditSeoShape> = {
       return ok({
         run_id: runId,
         url: args.url,
+        final_url: finalUrl,
+        http_status: httpStatus,
         counts,
         findings,
         status,
@@ -238,7 +266,7 @@ function extractSeoSnapshot(): SeoSnapshot {
   };
 }
 
-function runSeoRules(snap: SeoSnapshot, checks: Set<string>): Finding[] {
+export function runSeoRules(snap: SeoSnapshot, checks: Set<string>): Finding[] {
   const out: Finding[] = [];
 
   if (checks.has("title")) {
@@ -341,11 +369,12 @@ function runSeoRules(snap: SeoSnapshot, checks: Set<string>): Finding[] {
   }
 
   if (checks.has("robots") && snap.robots) {
-    if (/noindex/i.test(snap.robots)) {
+    // `none` is shorthand for `noindex, nofollow`.
+    if (/\b(noindex|none)\b/i.test(snap.robots)) {
       out.push({
         check: "robots",
         severity: "critical",
-        message: "meta robots declares noindex",
+        message: "meta robots blocks indexing (noindex/none)",
         evidence: snap.robots,
       });
     }
@@ -387,9 +416,10 @@ function runSeoRules(snap: SeoSnapshot, checks: Set<string>): Finding[] {
         });
         continue;
       }
-      const parsed = entry.parsed as { "@type"?: unknown } | null;
-      const type = parsed && typeof parsed === "object" ? parsed["@type"] : undefined;
-      if (!type) {
+      // Accept the common wrapper forms: a top-level array of nodes, or a
+      // `@graph` document (Yoast/Schema.org). Flag only when no node anywhere
+      // carries an @type, not when the wrapper root lacks one.
+      if (jsonLdMissingType(entry.parsed)) {
         out.push({
           check: "json_ld",
           severity: "high",
@@ -419,6 +449,26 @@ function runSeoRules(snap: SeoSnapshot, checks: Set<string>): Finding[] {
   }
 
   return out;
+}
+
+/** Collect every candidate JSON-LD node, unwrapping top-level arrays and `@graph`. */
+function collectLdNodes(parsed: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(parsed)) return parsed.flatMap(collectLdNodes);
+  if (parsed && typeof parsed === "object") {
+    const obj = parsed as Record<string, unknown>;
+    if (Array.isArray(obj["@graph"])) {
+      return (obj["@graph"] as unknown[]).flatMap(collectLdNodes);
+    }
+    return [obj];
+  }
+  return [];
+}
+
+/** True when no node in the document carries an `@type`. */
+function jsonLdMissingType(parsed: unknown): boolean {
+  const nodes = collectLdNodes(parsed);
+  if (nodes.length === 0) return true;
+  return nodes.every((n) => !n["@type"]);
 }
 
 function countBySeverity(findings: Finding[]): Record<Severity, number> {

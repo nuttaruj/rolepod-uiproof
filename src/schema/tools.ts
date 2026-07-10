@@ -24,6 +24,10 @@ export const a11yStateSchema = z.object({
   selected: z.boolean().optional(),
   expanded: z.boolean().optional(),
   disabled: z.boolean().optional(),
+  /** Checkbox/switch/toggle state (mobile). */
+  checked: z.boolean().optional(),
+  /** On-screen visibility (mobile XCUITest `visible`). */
+  visible: z.boolean().optional(),
 });
 
 export type A11yNode = {
@@ -225,6 +229,14 @@ export const browserHandleDialogShape = {
    * Default 30s if no dialog appears, handler is auto-removed.
    */
   timeout_ms: z.number().int().positive().optional(),
+  /**
+   * When false (default), arm the handler and return immediately so a
+   * sequential MCP client can issue the triggering action next; the outcome
+   * surfaces as `last_dialog` on a later call. When true, block until the
+   * dialog fires or the timeout elapses (only safe if another actor triggers
+   * the dialog concurrently).
+   */
+  wait: z.boolean().default(false),
 } as const;
 export const browserHandleDialogSchema = z.object(browserHandleDialogShape);
 export type BrowserHandleDialogInput = z.infer<typeof browserHandleDialogSchema>;
@@ -530,7 +542,12 @@ export const visualDiffShape = {
   open: browserOpenSchema,
   baseline_id: z.string().min(1),
   viewport: viewportSchema.optional(),
-  threshold_pct: z.number().min(0).max(1).default(0.1),
+  /**
+   * Max fraction of differing pixels (0–1) that still passes. Default 0.01
+   * (1% of pixels). The old 0.1 default let a tenth of the page change and
+   * still report a pass — too lax to catch real visual regressions.
+   */
+  threshold_pct: z.number().min(0).max(1).default(0.01),
   close_on_finish: z.boolean().default(true),
   /** Pixel sensitivity for pixelmatch (0 = strict, 1 = lax). Default 0.1. */
   pixel_threshold: z.number().min(0).max(1).default(0.1),

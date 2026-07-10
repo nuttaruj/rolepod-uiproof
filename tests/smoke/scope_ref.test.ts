@@ -6,6 +6,8 @@ import { ArtifactStore } from "../../src/artifact/ArtifactStore.js";
 import { PlaywrightEngine } from "../../src/engine/PlaywrightEngine.js";
 import { SessionRegistry } from "../../src/session/SessionRegistry.js";
 import { auditA11yTool } from "../../src/tools/composite/audit_a11y.js";
+import { exampleComReachable } from "./_net.js";
+const ONLINE = await exampleComReachable();
 import type { ToolContext } from "../../src/tools/types.js";
 
 const EXAMPLE_URL = "https://example.com";
@@ -28,7 +30,7 @@ afterAll(async () => {
   rmSync(tmpRoot, { recursive: true, force: true });
 });
 
-describe("audit_a11y scope={ref}", () => {
+describe.skipIf(!ONLINE)("audit_a11y scope={ref}", () => {
   it("returns unknown_ref for a bogus ref", async () => {
     const handler = auditA11yTool.build(ctx);
     const result = await handler({

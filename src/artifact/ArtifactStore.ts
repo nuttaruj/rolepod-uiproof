@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { isAbsolute, resolve, sep } from "node:path";
+import { RolepodMcpError } from "../util/errors.js";
 import { log } from "../util/log.js";
 import { detectRolepodParent } from "../util/rolepodProtocol.js";
 
@@ -65,30 +66,55 @@ export type StartRunResult = {
 };
 
 export class ArtifactStore {
-  readonly rootDir: string;
-  readonly mode: ArtifactMode;
+  rootDir: string;
+  mode: ArtifactMode;
   private readonly baselineRoot: string;
+  private readonly pinned: boolean;
   private evidenceGitignoreEnsured = false;
 
   constructor(
     opts: { rootDir?: string; mode?: ArtifactMode } = {},
   ) {
+    // An explicit rootDir or mode pins the store (tests, fixed roots). When
+    // neither is given (the production default), mode is re-detected per run
+    // so a parent marker written after boot is honoured — see refreshMode.
+    this.pinned = opts.rootDir !== undefined || opts.mode !== undefined;
+
     const parent = detectRolepodParent();
     this.mode = opts.mode ?? (parent.active ? "with-parent" : "standalone");
-
-    if (opts.rootDir !== undefined) {
-      this.rootDir = opts.rootDir;
-    } else if (this.mode === "with-parent") {
-      // Anchor evidence at git root so `check-work` finds it regardless of
-      // which subdirectory the skill was invoked from.
-      this.rootDir = resolve(parent.gitRoot, ".rolepod", "evidence");
-    } else {
-      this.rootDir = resolve(process.cwd(), ".rolepod-uiproof", "artifacts");
-    }
+    this.rootDir =
+      opts.rootDir !== undefined
+        ? opts.rootDir
+        : this.deriveRoot(this.mode, parent.gitRoot);
 
     // Baselines are config, not evidence — always live in the standalone
     // location so visual_diff sees the same set across modes.
     this.baselineRoot = resolve(process.cwd(), ".rolepod-uiproof", "baselines");
+  }
+
+  private deriveRoot(mode: ArtifactMode, gitRoot: string): string {
+    // with-parent anchors evidence at git root so `check-work` finds it
+    // regardless of which subdirectory the skill was invoked from.
+    return mode === "with-parent"
+      ? resolve(gitRoot, ".rolepod", "evidence")
+      : resolve(process.cwd(), ".rolepod-uiproof", "artifacts");
+  }
+
+  /**
+   * Re-detect parent mode at run time when the store was not pinned. The
+   * parent `rolepod` plugin's SessionStart hook can write
+   * `.rolepod/parent-active` after this MCP server already spawned; freezing
+   * mode at construction would strand evidence in the standalone dir where
+   * `check-work` never looks.
+   */
+  private refreshMode(): void {
+    if (this.pinned) return;
+    const parent = detectRolepodParent();
+    const mode: ArtifactMode = parent.active ? "with-parent" : "standalone";
+    if (mode === this.mode) return;
+    this.mode = mode;
+    this.rootDir = this.deriveRoot(mode, parent.gitRoot);
+    this.evidenceGitignoreEnsured = false; // new root needs its own .gitignore
   }
 
   /**
@@ -106,14 +132,16 @@ export class ArtifactStore {
     prefix = "run",
     opts: StartRunOptions = {},
   ): Promise<StartRunResult> {
+    this.refreshMode();
     const ts = this.timestampSlug();
     const skill = opts.skill ?? prefix;
 
     let runId: string;
     if (this.mode === "with-parent") {
-      // Parent expects a flat, sortable dirname. Append a short uuid only
-      // when two runs of the same skill could collide within one second.
-      runId = `${ts}-rolepod-uiproof-${skill}`;
+      // Parent expects a flat, sortable dirname; the short uuid keeps two runs
+      // of the same skill within one second from clobbering each other's
+      // evidence while preserving the sortable `${ts}-…` prefix.
+      runId = `${ts}-rolepod-uiproof-${skill}-${randomUUID().slice(0, 6)}`;
     } else {
       runId = `${prefix}_${ts}_${randomUUID().slice(0, 8)}`;
     }
@@ -172,15 +200,33 @@ export class ArtifactStore {
   }
 
   async writeReport(runDir: string, name: string, body: string): Promise<string> {
-    const path = resolve(runDir, name);
+    const path = this.resolveInside(runDir, name);
     await writeFile(path, body, "utf8");
     return path;
   }
 
   async writeBytes(runDir: string, name: string, buf: Buffer): Promise<string> {
-    const path = resolve(runDir, name);
+    const path = this.resolveInside(runDir, name);
     await writeFile(path, buf);
     return path;
+  }
+
+  /**
+   * Resolve `name` under `runDir`, rejecting any name that escapes the run
+   * directory. A caller-supplied filename (e.g. scaffold_e2e's `filename`)
+   * must never write outside the run dir via an absolute path or `../`.
+   */
+  private resolveInside(runDir: string, name: string): string {
+    const base = resolve(runDir);
+    const target = resolve(base, name);
+    if (isAbsolute(name) || (target !== base && !target.startsWith(base + sep))) {
+      throw new RolepodMcpError(
+        "invalid_input",
+        `Artifact name "${name}" escapes the run directory.`,
+        { name },
+      );
+    }
+    return target;
   }
 
   async ensureDir(absDir: string): Promise<string> {

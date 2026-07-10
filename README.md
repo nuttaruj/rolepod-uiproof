@@ -36,7 +36,9 @@ Every skill is **single-backend** (D-024) — it calls the rolepod-uiproof serve
 
 **Standalone** (default): use the 8 skills directly as atomic browser tools. Evidence saved under `./.rolepod-uiproof/artifacts/<run>/` with a `manifest.json` per Extension Protocol v1.
 
-**Combined with rolepod parent**: when the parent's SessionStart hook drops the marker file `<git-root>/.rolepod/parent-active` (single line of content = the protocol version, e.g. `v1`), uiproof writes evidence to `<git-root>/.rolepod/evidence/<ts>-rolepod-uiproof-<skill>/` instead, where parent's `check-work` skill auto-aggregates manifests into the verify report. The marker is read fresh per ArtifactStore construction; no env-var, no daemon. To force combined mode without a parent session: `mkdir -p .rolepod && echo v1 > .rolepod/parent-active`. No skill changes — same 30 tools, same 8 skills, smarter routing.
+**Combined with rolepod parent**: when the parent's SessionStart hook drops the marker file `<git-root>/.rolepod/parent-active` (single line of content = the protocol version, e.g. `v1`), uiproof writes evidence to `<git-root>/.rolepod/evidence/<ts>-rolepod-uiproof-<skill>/` instead, where parent's `check-work` skill auto-aggregates manifests into the verify report. The marker is re-detected per run, so a marker the parent writes after this server has already started is still honoured; no env-var, no daemon. To force combined mode without a parent session: `mkdir -p .rolepod && echo v1 > .rolepod/parent-active`. No skill changes — same 30 tools, same 8 skills, smarter routing.
+
+**Offline / registry-blocked machines**: the spawn configs fetch `@rolepod/uiproof` via `npx`, which needs npm-registry access. On an air-gapped or registry-blocked host, install once with `npm i -g @rolepod/uiproof@0.13.0` and set the MCP `command` to the global `rolepod-uiproof` binary (drop the `npx` / `-y` args) so no fetch is required at spawn time.
 
 | Install | Unlocks |
 |---|---|
@@ -157,7 +159,7 @@ Open Antigravity Settings → Customizations → **Open MCP Config** (or edit `~
   "mcpServers": {
     "rolepod-uiproof": {
       "command": "npx",
-      "args": ["-y", "@rolepod/uiproof"]
+      "args": ["-y", "@rolepod/uiproof@0.13.0"]
     }
   }
 }
@@ -179,7 +181,7 @@ Use this when your tool reads a standard `mcpServers` config (most non-CLI MCP c
   "mcpServers": {
     "rolepod-uiproof": {
       "command": "npx",
-      "args": ["-y", "@rolepod/uiproof"]
+      "args": ["-y", "@rolepod/uiproof@0.13.0"]
     }
   }
 }
@@ -202,7 +204,7 @@ Returns a `run_id`, `passed: true`, and a path under `./.rolepod-uiproof/artifac
 ```
 .rolepod-uiproof/artifacts/verify_20260524T101512_a1b2c3d4/
 ├── final.png            screenshot at end of run
-└── replay.json          replay bundle — re-runnable via `npx rolepod-uiproof replay …`
+└── replay.json          replay bundle — re-runnable via `npx @rolepod/uiproof replay …`
 ```
 
 Convert that to a Playwright Test file:
@@ -214,7 +216,7 @@ Convert that to a Playwright Test file:
 ## Verify your setup
 
 ```bash
-npx rolepod-uiproof doctor
+npx @rolepod/uiproof doctor
 ```
 
 ```
@@ -235,7 +237,7 @@ npx rolepod-uiproof doctor
 - **30 MCP tools** — 22 atomic browser/mobile primitives (`browser_open`, `_close`, `_snapshot`, `_click`, `_type`, `_key`, `_scroll`, `_wait_for`, `_screenshot`, `_navigate`, plus v0.5 additions `_hover`, `_drag`, `_fill_form`, `_upload_file`, `_handle_dialog`, `_console`, `_network`, `_set_env`, `_evaluate`, `_pages`, `_switch_page`, and v0.8 `_extract_computed_style`) + 8 composites (`verify_ui_flow`, `audit_a11y`, `visual_diff`, `scaffold_e2e`, `extract_ui_state`, and v0.7: `measure_cwv`, `audit_page_budget`, `audit_seo`). All prefixed `*` to namespace away from other MCP servers.
 - **2 engines behind one interface** — `PlaywrightEngine` for web (Chromium / Firefox / WebKit), `AppiumEngine` for iOS XCUITest + Android UIAutomator2. The Lead sees one unified `A11yNode` shape regardless of platform.
 - **Stable refs with explicit invalidation (D-010)** — every state-changing call invalidates prior refs; the engine returns a structured `stale_ref` error if you try to reuse one. No silent locator drift.
-- **Replay bundles** — every `/verify-ui` run writes a JSON replay you can re-run later with `npx rolepod-uiproof replay <bundle.json>`, agent-free.
+- **Replay bundles** — every `/verify-ui` run writes a JSON replay you can re-run later with `npx @rolepod/uiproof replay <bundle.json>`, agent-free.
 - **No internal LLM (D-004)** — your Lead agent makes every decision. We don't double-bill you for inference.
 
 ## Use with parent rolepod

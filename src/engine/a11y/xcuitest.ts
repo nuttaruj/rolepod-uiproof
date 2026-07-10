@@ -22,6 +22,13 @@ export type IosRefMeta = {
   type: string;
   /** 1-based class-chain index among siblings of the same `type`. */
   classChainIndex: number;
+  /**
+   * 1-based document-order index among ALL elements of the same `type` in the
+   * tree. A global class-chain query selects the nth element of a type across
+   * the whole subtree, so the sibling-scoped classChainIndex resolves the
+   * wrong element when used globally; this is the index the selector needs.
+   */
+  globalTypeIndex: number;
 };
 
 export type IosNormalizedSnapshot = {
@@ -43,11 +50,20 @@ export function parseXcuiTestTree(xmlString: string): IosNormalizedSnapshot {
   let counter = 0;
   const nextRef = (): string => `e${++counter}`;
 
+  // Tree-wide occurrence counter per type, in document (DFS pre-order) order —
+  // matches how a global class-chain query indexes elements.
+  const globalOcc = new Map<string, number>();
+
   let raw: RawNode[] = [];
   try {
     raw = parser.parse(xmlString) as RawNode[];
-  } catch {
-    raw = [];
+  } catch (err) {
+    // A genuinely malformed source must not become a silent empty-but-
+    // successful snapshot. (Empty input parses to [] without throwing and is
+    // handled by the application-root fallback below.)
+    throw new Error(
+      `Failed to parse iOS (XCUITest) page source: ${(err as Error).message}`,
+    );
   }
 
   const visit = (node: RawNode, classChainOcc: Map<string, number>): A11yNode | null => {
@@ -58,6 +74,8 @@ export function parseXcuiTestTree(xmlString: string): IosNormalizedSnapshot {
 
     const idx = (classChainOcc.get(tagName) ?? 0) + 1;
     classChainOcc.set(tagName, idx);
+    const globalIdx = (globalOcc.get(tagName) ?? 0) + 1;
+    globalOcc.set(tagName, globalIdx);
 
     const ref = nextRef();
     refIndex.set(ref, {
@@ -67,6 +85,7 @@ export function parseXcuiTestTree(xmlString: string): IosNormalizedSnapshot {
       label: attrs["@label"],
       type: tagName,
       classChainIndex: idx,
+      globalTypeIndex: globalIdx,
     });
 
     const role = tagName.startsWith("XCUIElementType")
@@ -81,6 +100,9 @@ export function parseXcuiTestTree(xmlString: string): IosNormalizedSnapshot {
     const state: A11yNode["state"] = {};
     if (attrs["@enabled"] === "false") state.disabled = true;
     if (attrs["@selected"] === "true") state.selected = true;
+    // Carry on-screen visibility so text_visible/snapshots don't treat an
+    // off-screen element as visible.
+    if (attrs["@visible"] !== undefined) state.visible = attrs["@visible"] === "true";
     if (Object.keys(state).length > 0) a11y.state = state;
 
     if (childrenRaw.length > 0) {
@@ -110,6 +132,7 @@ export function parseXcuiTestTree(xmlString: string): IosNormalizedSnapshot {
     kind: "ios",
     type: "XCUIElementTypeApplication",
     classChainIndex: 1,
+    globalTypeIndex: 1,
   });
   const root: A11yNode = { ref: rootRef, role: "application" };
   if (topLevel.length > 0) root.children = topLevel;

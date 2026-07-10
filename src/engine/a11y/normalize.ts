@@ -131,8 +131,13 @@ export function parseAriaSnapshot(snapshotYaml: string): NormalizedSnapshot {
   let loaded: YamlValue;
   try {
     loaded = (yaml.load(snapshotYaml) as YamlValue) ?? [];
-  } catch {
-    loaded = [];
+  } catch (err) {
+    // A genuinely malformed snapshot must not become a silent empty-but-
+    // successful tree (assertions would falsely pass/fail against nothing).
+    // Empty input yields undefined -> [] above without throwing.
+    throw new Error(
+      `Failed to parse aria snapshot YAML: ${(err as Error).message}`,
+    );
   }
 
   const topLevel: A11yNode[] = [];
