@@ -77,6 +77,14 @@ type DialogArming = {
   resolve: (handled: boolean) => void;
 };
 
+export type DialogInfo = {
+  type: string;
+  message: string;
+  action: "accept" | "dismiss" | "accept_with_text" | "auto_dismiss";
+  handled: boolean;
+  at: string;
+};
+
 type SessionInternals = {
   session: WebSession;
   refIndex: Map<string, RefMeta>;
@@ -92,6 +100,7 @@ type SessionInternals = {
   networkInflight: Map<string, { id: number; startedAt: number; resourceType: string }>;
   networkNextId: number;
   dialogArming: DialogArming | null;
+  lastDialog: DialogInfo | null;
   captureOpts: NonNullable<OpenOptions["capture"]> | undefined;
   traceStarted: boolean;
 };
@@ -269,6 +278,7 @@ export class PlaywrightEngine implements Engine {
       networkInflight: new Map(),
       networkNextId: 1,
       dialogArming: null,
+      lastDialog: null,
       captureOpts: opts.capture,
       traceStarted: !!opts.capture?.trace,
     };
@@ -280,7 +290,15 @@ export class PlaywrightEngine implements Engine {
     });
 
     if (opts.url) {
-      await page.goto(opts.url, { waitUntil: "domcontentloaded" });
+      try {
+        await page.goto(opts.url, { waitUntil: "domcontentloaded" });
+      } catch (err) {
+        // The browser launched but the initial navigation failed (dead URL,
+        // down localhost, redirect loop). Close it so a session that never
+        // opened doesn't leak a live browser process.
+        await browser.close().catch(() => undefined);
+        throw err;
+      }
     }
 
     this.sessions.set(sessionId, internals);
@@ -712,8 +730,9 @@ export class PlaywrightEngine implements Engine {
       action: "accept" | "dismiss" | "accept_with_text";
       text?: string;
       timeoutMs?: number;
+      wait?: boolean;
     },
-  ): Promise<{ handled: boolean }> {
+  ): Promise<{ handled: boolean; armed?: boolean; last_dialog?: DialogInfo | null }> {
     const s = this.requireSession(sessionId);
     const timeoutMs = opts.timeoutMs ?? 30_000;
     const expiresAt = Date.now() + timeoutMs;
@@ -722,6 +741,24 @@ export class PlaywrightEngine implements Engine {
     // replacement.
     if (s.dialogArming) {
       s.dialogArming.resolve(false);
+    }
+
+    if (!opts.wait) {
+      // Default: arm and return immediately so a sequential MCP client can
+      // issue the triggering action next (a blocking wait would deadlock —
+      // the client can't fire the dialog while this call is pending). The
+      // page.on("dialog") consumer handles the next dialog; its outcome
+      // surfaces as `last_dialog`. handlePageDialog's expiresAt check auto-
+      // expires a stale arming.
+      s.dialogArming = {
+        action: opts.action,
+        text: opts.text,
+        expiresAt,
+        resolve: () => {
+          s.dialogArming = null;
+        },
+      };
+      return { armed: true, handled: false, last_dialog: s.lastDialog };
     }
 
     return new Promise<{ handled: boolean }>((resolve) => {
@@ -1014,16 +1051,34 @@ export class PlaywrightEngine implements Engine {
     page.on("dialog", (dialog: Dialog) => {
       void this.handlePageDialog(s, dialog);
     });
+
+    // Prune a page from the session when it closes so listPages/switch_page
+    // never operate on a dead tab, and activePageIndex never dangles.
+    page.on("close", () => {
+      const idx = s.pages.indexOf(page);
+      if (idx === -1) return;
+      s.pages.splice(idx, 1);
+      if (idx < s.activePageIndex) {
+        s.activePageIndex -= 1;
+      } else if (idx === s.activePageIndex) {
+        s.activePageIndex = Math.min(s.activePageIndex, s.pages.length - 1);
+      }
+      if (s.activePageIndex < 0) s.activePageIndex = 0;
+    });
   }
 
   private async handlePageDialog(
     s: SessionInternals,
     dialog: Dialog,
   ): Promise<void> {
+    const type = dialog.type();
+    const message = dialog.message();
+    const at = new Date().toISOString();
     const arm = s.dialogArming;
     if (!arm || Date.now() > arm.expiresAt) {
       // Nothing armed → auto-dismiss so the page does not hang.
       await dialog.dismiss().catch(() => undefined);
+      s.lastDialog = { type, message, action: "auto_dismiss", handled: false, at };
       if (arm) arm.resolve(false);
       return;
     }
@@ -1035,8 +1090,10 @@ export class PlaywrightEngine implements Engine {
       } else {
         await dialog.dismiss();
       }
+      s.lastDialog = { type, message, action: arm.action, handled: true, at };
       arm.resolve(true);
     } catch (err) {
+      s.lastDialog = { type, message, action: arm.action, handled: false, at };
       log.warn("dialog handle failed", {
         session_id: s.session.id,
         err: String(err),

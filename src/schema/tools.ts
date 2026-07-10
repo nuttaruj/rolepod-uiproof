@@ -225,6 +225,14 @@ export const browserHandleDialogShape = {
    * Default 30s if no dialog appears, handler is auto-removed.
    */
   timeout_ms: z.number().int().positive().optional(),
+  /**
+   * When false (default), arm the handler and return immediately so a
+   * sequential MCP client can issue the triggering action next; the outcome
+   * surfaces as `last_dialog` on a later call. When true, block until the
+   * dialog fires or the timeout elapses (only safe if another actor triggers
+   * the dialog concurrently).
+   */
+  wait: z.boolean().default(false),
 } as const;
 export const browserHandleDialogSchema = z.object(browserHandleDialogShape);
 export type BrowserHandleDialogInput = z.infer<typeof browserHandleDialogSchema>;

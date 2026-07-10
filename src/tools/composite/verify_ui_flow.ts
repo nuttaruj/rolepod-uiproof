@@ -172,7 +172,7 @@ async function runFlow(
   args: VerifyUiFlowInput,
   steps: VerifyUiFlowInput["steps"],
   runDir: string,
-  opts: { captureEvidence: boolean; bundleName: string },
+  opts: { captureEvidence: boolean; bundleName: string; forceClose?: boolean },
 ): Promise<RunOutcome> {
   const evidence: Evidence = { screenshots: [] };
   const captures = new Set<string>(args.capture ?? ["screenshot"]);
@@ -300,7 +300,9 @@ async function runFlow(
         /* swallow — replay bundle is best-effort */
       }
     }
-    if (args.close_on_finish) {
+    // forceClose closes throwaway runs (minimization attempts) regardless of
+    // the caller's close_on_finish, so ddmin can't leak one browser per attempt.
+    if (opts.forceClose || args.close_on_finish) {
       await ctx.registry.close(sessionHandle).catch(() => undefined);
     }
   }
@@ -371,7 +373,7 @@ async function minimize(
       args,
       subset.map((t) => t.step),
       runDir,
-      { captureEvidence: false, bundleName: "minimize-tmp.json" },
+      { captureEvidence: false, bundleName: "minimize-tmp.json", forceClose: true },
     );
     return outcome.passed;
   };
