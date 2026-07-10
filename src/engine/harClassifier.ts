@@ -103,6 +103,29 @@ export function entryBytes(entry: HarEntry): { size: number; transfer: number } 
   return { size: Math.max(0, size), transfer: Math.max(0, transfer) };
 }
 
+/**
+ * Common two-level public suffixes where the registrable domain is the last
+ * three labels (e.g. `bbc.co.uk`). Not exhaustive — a cheap stand-in for a
+ * full public-suffix list, enough to stop sibling subdomains being misread.
+ */
+const TWO_LEVEL_SUFFIXES = new Set([
+  "co.uk", "org.uk", "gov.uk", "ac.uk", "co.jp", "or.jp", "ne.jp",
+  "com.au", "net.au", "org.au", "co.nz", "co.za", "com.br", "com.mx",
+  "co.in", "co.kr", "com.cn", "com.sg", "com.hk", "com.tw",
+]);
+
+/**
+ * Best-effort registrable domain (eTLD+1) without a public-suffix-list
+ * dependency. `www.site.com` and `cdn.site.com` both resolve to `site.com`.
+ */
+export function registrableDomain(host: string): string {
+  const parts = host.split(".").filter(Boolean);
+  if (parts.length <= 2) return host;
+  const last2 = parts.slice(-2).join(".");
+  const last3 = parts.slice(-3).join(".");
+  return TWO_LEVEL_SUFFIXES.has(last2) ? last3 : last2;
+}
+
 export function isThirdParty(
   entry: HarEntry,
   pageHostname: string,
@@ -117,10 +140,11 @@ export function isThirdParty(
     return false;
   }
   if (!host) return false;
-  if (host === pageHostname) return false;
-  // Treat same-eTLD+1 as first-party when possible (cheap heuristic).
-  if (pageHostname && host.endsWith(`.${pageHostname}`)) return false;
-  if (pageHostname && pageHostname.endsWith(`.${host}`)) return false;
+  // Same registrable domain (eTLD+1) → first-party, so sibling subdomains such
+  // as `www.` and `cdn.` on one site are not misreported as third-party.
+  if (pageHostname && registrableDomain(host) === registrableDomain(pageHostname)) {
+    return false;
+  }
   if (thirdPartyHostnames && thirdPartyHostnames.length > 0) {
     return thirdPartyHostnames.some((h) => host === h || host.endsWith(`.${h}`));
   }
@@ -175,13 +199,16 @@ const BYTES_PER_KB = 1024;
 export function compareToBudget(summary: HarSummary, budget: Budget): BudgetReport {
   const violations: BudgetViolation[] = [];
 
+  // Compare against transfer size (what actually crossed the wire, gzip/brotli
+  // included) — not the decoded content.size, which over-reports on every
+  // compressed site and produces false budget failures.
   const checks: Array<[string, number, number]> = [
-    ["total", summary.total.bytes, budget.total_kb],
-    ["js", summary.by_category.js.bytes, budget.js_kb],
-    ["css", summary.by_category.css.bytes, budget.css_kb],
-    ["image", summary.by_category.image.bytes, budget.image_kb],
-    ["font", summary.by_category.font.bytes, budget.font_kb],
-    ["third_party", summary.third_party.bytes, budget.third_party_kb],
+    ["total", summary.total.transferBytes, budget.total_kb],
+    ["js", summary.by_category.js.transferBytes, budget.js_kb],
+    ["css", summary.by_category.css.transferBytes, budget.css_kb],
+    ["image", summary.by_category.image.transferBytes, budget.image_kb],
+    ["font", summary.by_category.font.transferBytes, budget.font_kb],
+    ["third_party", summary.third_party.transferBytes, budget.third_party_kb],
   ];
 
   for (const [category, bytes, budgetKb] of checks) {

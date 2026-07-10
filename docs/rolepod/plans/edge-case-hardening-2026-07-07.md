@@ -165,23 +165,23 @@ Test infra already exists (vitest, 131 passing). No bootstrap needed. Offline-de
 ## PR5 — Audit correctness (SEO + page budget)
 
 ### Task 5.1 — Add an HTTP-status/redirect helper; SEO audit must not audit error pages as success
-- [ ] `src/tools/composite/audit_seo.ts:88` — status/redirects never checked; a 404/500 body or a canonical redirect is audited as if it were the requested page. Capture the main navigation `Response` (status, `url()` after redirects) in `open`/audit; when status >= 400, return a top-level FAIL ("requested URL returned <status>") instead of scanning the error page. Surface the final (redirected) URL in the report + manifest.
+- [x] `src/tools/composite/audit_seo.ts:88` — status/redirects never checked; a 404/500 body or a canonical redirect is audited as if it were the requested page. Capture the main navigation `Response` (status, `url()` after redirects) in `open`/audit; when status >= 400, return a top-level FAIL ("requested URL returned <status>") instead of scanning the error page. Surface the final (redirected) URL in the report + manifest.
 - [ ] Reuse this status helper in `navigate`/`open` (audit `atomic-observe` finding: navigate/open swallow 4xx/5xx) and in `visual_diff` seed guard (Task 4.6).
 - **Test:** `tests/smoke/` new `audit_seo_status.test.ts` — point at `https://example.com/nonexistent-<rand>` (or a local 404) → assert audit reports the status FAIL, not "missing title".
 - **Command:** `npx vitest run tests/smoke/audit_seo_status.test.ts`
 
 ### Task 5.2 — SEO audit must read DOM after client render, not at `domcontentloaded`
-- [ ] `src/tools/composite/audit_seo.ts:90` — reads title/meta at `domcontentloaded`, so CSR/SPA (React/Vue/Next) report false-critical missing title/meta. Wait for `load` + a short settle (reuse the `settle` step's networkidle-or-timeout), or wait for `<title>` non-empty with a bounded timeout, before snapshotting head/meta. Document that fully client-blank pages still legitimately fail.
+- [x] `src/tools/composite/audit_seo.ts:90` — reads title/meta at `domcontentloaded`, so CSR/SPA (React/Vue/Next) report false-critical missing title/meta. Wait for `load` + a short settle (reuse the `settle` step's networkidle-or-timeout), or wait for `<title>` non-empty with a bounded timeout, before snapshotting head/meta. Document that fully client-blank pages still legitimately fail.
 - **Test:** `tests/smoke/audit_seo_status.test.ts` (extend) with a data: URL or local page that sets `document.title` via script → assert the title is detected.
 - **Command:** `npx vitest run tests/smoke/audit_seo_status.test.ts`
 
 ### Task 5.3 — SEO: detect robots `none`; accept JSON-LD `@graph` and array forms
-- [ ] `src/tools/composite/audit_seo.ts:346-349` — robots check misses `none` (= `noindex,nofollow`); treat `none` as noindex+nofollow. `:385-391` — JSON-LD validity flags valid `@graph` and top-level-array documents as "missing @type" (common Yoast/Schema.org output). Walk `@graph[]` and top-level arrays, validating `@type` per node, not on the root object.
+- [x] `src/tools/composite/audit_seo.ts:346-349` — robots check misses `none` (= `noindex,nofollow`); treat `none` as noindex+nofollow. `:385-391` — JSON-LD validity flags valid `@graph` and top-level-array documents as "missing @type" (common Yoast/Schema.org output). Walk `@graph[]` and top-level arrays, validating `@type` per node, not on the root object.
 - **Test:** `tests/unit/audit_seo_parse.test.ts` — feed (a) `<meta name=robots content=none>` → flagged noindex; (b) a `@graph` JSON-LD with valid per-node `@type` → **no** "missing @type"; (c) a top-level array → same.
 - **Command:** `npx vitest run tests/unit/audit_seo_parse.test.ts`
 
 ### Task 5.4 — Page budget: compare transfer size, not decoded size; fix third-party host match; don't swallow the idle timeout
-- [ ] `src/engine/harClassifier.ts:~179` — budget compares `content.size` (uncompressed) → wrong FAIL on any gzip/brotli site (audit obs 16800). Use HAR `response._transferSize` (or `response.bodySize` + headers) for the transfer total; keep decoded size only where explicitly labelled.
+- [x] `src/engine/harClassifier.ts:~179` — budget compares `content.size` (uncompressed) → wrong FAIL on any gzip/brotli site (audit obs 16800). Use HAR `response._transferSize` (or `response.bodySize` + headers) for the transfer total; keep decoded size only where explicitly labelled.
 - [ ] `src/engine/harClassifier.ts:~122` — third-party heuristic misclassifies sibling subdomains (`www.` page + `cdn.`/`static.` assets flagged third_party). Compare **registrable domain** (eTLD+1) not full hostname; treat same-eTLD+1 as first-party.
 - [ ] `src/tools/composite/audit_page_budget.ts:~63` — `networkidle` timeout is swallowed → a still-loading page gets a silent "pass" on a partial measurement. On idle-timeout, mark the measurement `partial:true` and either FAIL or clearly flag it (never silent pass).
 - **Test:** `tests/unit/harClassifier.test.ts` (new) — (a) an entry with decoded 100KB / transfer 20KB → budget uses 20KB; (b) `www.site.com` page + `cdn.site.com` asset → first-party; (c) partial flag set when idle not reached (stub).

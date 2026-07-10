@@ -55,13 +55,21 @@ export const auditPageBudgetTool: ToolModule<typeof auditPageBudgetShape> = {
         );
       }
 
+      let idleReached = true;
       try {
         const page = engine.getPageForSession(session.id);
         await engine.navigate(sessionHandle, args.url);
         if (args.wait_for_idle_ms > 0) {
-          await page
-            .waitForLoadState("networkidle", { timeout: args.wait_for_idle_ms })
-            .catch(() => undefined);
+          try {
+            await page.waitForLoadState("networkidle", {
+              timeout: args.wait_for_idle_ms,
+            });
+          } catch {
+            // Network never went idle within the window — the HAR is a partial
+            // capture (requests still in flight), so the measurement can't be
+            // trusted to confirm a pass. Flagged below.
+            idleReached = false;
+          }
         }
       } finally {
         if (args.close_on_finish) {
@@ -89,12 +97,28 @@ export const auditPageBudgetTool: ToolModule<typeof auditPageBudgetShape> = {
         thirdPartyHostnames: args.third_party_hostnames,
       });
       const report = compareToBudget(summary, budget);
-      const status: ManifestStatus = report.status;
+      // A partial measurement (network never went idle) cannot confirm a pass;
+      // downgrade pass → warn so a still-loading page never reports "within
+      // budget" on incomplete data.
+      const status: ManifestStatus =
+        !idleReached && report.status === "pass" ? "warn" : report.status;
 
       const reportPayload = {
         run_id: runId,
         url: args.url,
         budget,
+        partial: !idleReached,
+        // Budget is compared against transfer bytes (wire size); decoded bytes
+        // are reported too for reference.
+        totals_transfer_bytes: {
+          total: summary.total.transferBytes,
+          js: summary.by_category.js.transferBytes,
+          css: summary.by_category.css.transferBytes,
+          image: summary.by_category.image.transferBytes,
+          font: summary.by_category.font.transferBytes,
+          other: summary.by_category.other.transferBytes,
+          third_party: summary.third_party.transferBytes,
+        },
         totals_bytes: {
           total: summary.total.bytes,
           js: summary.by_category.js.bytes,
@@ -129,7 +153,9 @@ export const auditPageBudgetTool: ToolModule<typeof auditPageBudgetShape> = {
         metadata: {
           url: args.url,
           budget,
+          partial: !idleReached,
           violations: report.violations,
+          totals_transfer_bytes: reportPayload.totals_transfer_bytes,
           totals_bytes: reportPayload.totals_bytes,
           request_count: reportPayload.request_count,
         },
@@ -138,6 +164,8 @@ export const auditPageBudgetTool: ToolModule<typeof auditPageBudgetShape> = {
       return ok({
         run_id: runId,
         url: args.url,
+        partial: !idleReached,
+        totals_transfer_bytes: reportPayload.totals_transfer_bytes,
         totals_bytes: reportPayload.totals_bytes,
         request_count: reportPayload.request_count,
         violations: report.violations,
@@ -152,16 +180,21 @@ export const auditPageBudgetTool: ToolModule<typeof auditPageBudgetShape> = {
 
 function buildSummary(
   payload: {
-    totals_bytes: { total: number };
+    totals_transfer_bytes: { total: number };
     request_count: number;
+    partial: boolean;
     violations: Array<{ category: string; over_pct: number }>;
   },
   status: ManifestStatus,
 ): string {
-  const totalKb = Math.round(payload.totals_bytes.total / 1024);
+  const totalKb = Math.round(payload.totals_transfer_bytes.total / 1024);
   const reqs = payload.request_count;
+  const prefix = payload.partial ? "PARTIAL (network never idled) — " : "";
   if (status === "pass") {
-    return `Page budget: ${totalKb}KB across ${reqs} requests — within budget.`;
+    return `${prefix}Page budget: ${totalKb}KB across ${reqs} requests — within budget.`;
+  }
+  if (payload.violations.length === 0) {
+    return `${prefix}Page budget: ${totalKb}KB / ${reqs} requests — measurement incomplete, treat as unconfirmed.`;
   }
   const worst = payload.violations
     .slice()
