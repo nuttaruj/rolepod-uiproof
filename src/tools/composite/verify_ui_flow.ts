@@ -562,7 +562,10 @@ function evaluateExpect(
       if (!node) return false;
       switch (exp.state) {
         case "visible":
-          return true;
+          // Mobile (XCUITest) carries explicit visibility; an off-screen node
+          // must not satisfy a "visible" assertion. Web has no state.visible,
+          // so `!== false` keeps existing behaviour (present-in-tree = visible).
+          return node.state?.visible !== false;
         case "enabled":
           return node.state?.disabled !== true;
         case "focused":
@@ -716,12 +719,16 @@ export function resolveExpectNode(tree: A11yNode, query: string): A11yNode | nul
   return null;
 }
 
-function treeHasText(tree: A11yNode, text: string): boolean {
+export function treeHasText(tree: A11yNode, text: string): boolean {
   const target = text.toLowerCase();
   const visit = (node: A11yNode): boolean => {
+    // An explicitly off-screen node (mobile state.visible === false) must not
+    // satisfy text_visible. Web nodes have no state.visible, so this is a
+    // no-op there. Children are still visited — they carry their own state.
     if (
-      (node.name && node.name.toLowerCase().includes(target)) ||
-      (node.value && node.value.toLowerCase().includes(target))
+      node.state?.visible !== false &&
+      ((node.name && node.name.toLowerCase().includes(target)) ||
+        (node.value && node.value.toLowerCase().includes(target)))
     ) {
       return true;
     }

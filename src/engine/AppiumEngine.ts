@@ -436,13 +436,27 @@ function escape(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-function treeIncludesText(node: { name?: string; value?: string; children?: unknown[] }, text: string): boolean {
+type TextNode = {
+  name?: string;
+  value?: string;
+  state?: { visible?: boolean };
+  children?: unknown[];
+};
+
+function treeIncludesText(node: TextNode, text: string): boolean {
   const target = text.toLowerCase();
-  const visit = (n: { name?: string; value?: string; children?: unknown[] }): boolean => {
-    if ((n.name && n.name.toLowerCase().includes(target)) ||
-        (n.value && n.value.toLowerCase().includes(target))) return true;
+  const visit = (n: TextNode): boolean => {
+    // Skip an explicitly off-screen node for text_visible / ref_exists waits —
+    // an invisible node's text must not satisfy the condition.
+    if (
+      n.state?.visible !== false &&
+      ((n.name && n.name.toLowerCase().includes(target)) ||
+        (n.value && n.value.toLowerCase().includes(target)))
+    ) {
+      return true;
+    }
     if (!n.children) return false;
-    for (const c of n.children as Array<{ name?: string; value?: string; children?: unknown[] }>) {
+    for (const c of n.children as TextNode[]) {
       if (visit(c)) return true;
     }
     return false;

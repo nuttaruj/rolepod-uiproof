@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveStepRef,
   resolveExpectNode,
+  treeHasText,
 } from "../../src/tools/composite/verify_ui_flow.js";
 import type { A11yNode } from "../../src/schema/tools.js";
 
@@ -76,5 +77,33 @@ describe("resolveExpectNode (ref_in_state resolution)", () => {
 
   it("returns null when nothing matches", () => {
     expect(resolveExpectNode(tree, "no-such-label")).toBeNull();
+  });
+});
+
+describe("treeHasText respects mobile visibility", () => {
+  it("does not match an off-screen (visible:false) node — no false text_visible", () => {
+    const t: A11yNode = {
+      ref: "root",
+      role: "document",
+      children: [
+        { ref: "a", role: "text", name: "Hidden Label", state: { visible: false } },
+      ],
+    };
+    expect(treeHasText(t, "Hidden Label")).toBe(false);
+  });
+
+  it("matches a visible node", () => {
+    const t: A11yNode = {
+      ref: "root",
+      role: "document",
+      children: [
+        { ref: "a", role: "text", name: "Shown Label", state: { visible: true } },
+      ],
+    };
+    expect(treeHasText(t, "Shown Label")).toBe(true);
+  });
+
+  it("matches a web node with no visibility state (unchanged behaviour)", () => {
+    expect(treeHasText(node("root", "document", "", [node("a", "text", "Web Label")]), "Web Label")).toBe(true);
   });
 });
