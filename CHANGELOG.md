@@ -7,6 +7,28 @@ release.
 
 ## [Unreleased]
 
+## [0.13.1] — 2026-07-15
+
+Onboarding fix: browsers now self-provision.
+
+### Fixed
+
+- **Auto-install browsers on first launch.** When `browser_open` fails because
+  the Playwright browser binary isn't downloaded (a fresh `npx` install, or a
+  Playwright version bump that changed the required browser build), the engine
+  now runs `playwright install` for the needed browser once and retries —
+  instead of surfacing "Executable doesn't exist" on every call. Opt out with
+  `ROLEPOD_NO_AUTO_INSTALL=1`. This removes the confusing "installed it, still
+  doesn't work" first-run experience.
+
+### Changed
+
+- **Pinned `playwright` to an exact version (`1.60.0`).** The previous
+  `^1.60.0` let `npx` resolve a newer Playwright on every spawn, whose browser
+  build the local cache didn't have — the root cause of the recurring
+  "just installed or updated, run npx playwright install" errors. Pinning keeps
+  the required browser build stable; auto-install covers the first download.
+
 ## [0.13.0] — 2026-07-07
 
 Edge-case hardening release. Reconciles the version split (npm package was

@@ -38,7 +38,7 @@ Every skill is **single-backend** (D-024) — it calls the rolepod-uiproof serve
 
 **Combined with rolepod parent**: when the parent's SessionStart hook drops the marker file `<git-root>/.rolepod/parent-active` (single line of content = the protocol version, e.g. `v1`), uiproof writes evidence to `<git-root>/.rolepod/evidence/<ts>-rolepod-uiproof-<skill>/` instead, where parent's `check-work` skill auto-aggregates manifests into the verify report. The marker is re-detected per run, so a marker the parent writes after this server has already started is still honoured; no env-var, no daemon. To force combined mode without a parent session: `mkdir -p .rolepod && echo v1 > .rolepod/parent-active`. No skill changes — same 30 tools, same 8 skills, smarter routing.
 
-**Offline / registry-blocked machines**: the spawn configs fetch `@rolepod/uiproof` via `npx`, which needs npm-registry access. On an air-gapped or registry-blocked host, install once with `npm i -g @rolepod/uiproof@0.13.0` and set the MCP `command` to the global `rolepod-uiproof` binary (drop the `npx` / `-y` args) so no fetch is required at spawn time.
+**Offline / registry-blocked machines**: the spawn configs fetch `@rolepod/uiproof` via `npx`, which needs npm-registry access. On an air-gapped or registry-blocked host, install once with `npm i -g @rolepod/uiproof@0.13.1` and set the MCP `command` to the global `rolepod-uiproof` binary (drop the `npx` / `-y` args) so no fetch is required at spawn time.
 
 | Install | Unlocks |
 |---|---|
@@ -159,7 +159,7 @@ Open Antigravity Settings → Customizations → **Open MCP Config** (or edit `~
   "mcpServers": {
     "rolepod-uiproof": {
       "command": "npx",
-      "args": ["-y", "@rolepod/uiproof@0.13.0"]
+      "args": ["-y", "@rolepod/uiproof@0.13.1"]
     }
   }
 }
@@ -181,7 +181,7 @@ Use this when your tool reads a standard `mcpServers` config (most non-CLI MCP c
   "mcpServers": {
     "rolepod-uiproof": {
       "command": "npx",
-      "args": ["-y", "@rolepod/uiproof@0.13.0"]
+      "args": ["-y", "@rolepod/uiproof@0.13.1"]
     }
   }
 }

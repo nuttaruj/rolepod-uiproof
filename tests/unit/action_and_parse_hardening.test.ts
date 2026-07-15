@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { parseAriaSnapshot } from "../../src/engine/a11y/normalize.js";
-import { classifyActionTimeout } from "../../src/engine/PlaywrightEngine.js";
+import {
+  classifyActionTimeout,
+  isMissingBrowserError,
+} from "../../src/engine/PlaywrightEngine.js";
 
 describe("parseAriaSnapshot — malformed input is not a silent empty success", () => {
   it("throws on malformed YAML", () => {
@@ -27,5 +30,19 @@ describe("classifyActionTimeout — actionability error classification", () => {
   it("returns null for any non-timeout error (rethrown as-is)", () => {
     expect(classifyActionTimeout("click", new Error("boom"))).toBeNull();
     expect(classifyActionTimeout("click", "not even an error")).toBeNull();
+  });
+});
+
+describe("isMissingBrowserError — triggers auto-install", () => {
+  it("detects the 'Executable doesn't exist' launch failure", () => {
+    const e = new Error(
+      "browserType.launch: Executable doesn't exist at /…/chrome-headless-shell\nPlease run the following command to download new browsers:\n  npx playwright install",
+    );
+    expect(isMissingBrowserError(e)).toBe(true);
+  });
+
+  it("does not mistake an ordinary launch error for a missing browser", () => {
+    expect(isMissingBrowserError(new Error("Target page crashed"))).toBe(false);
+    expect(isMissingBrowserError(new Error("net::ERR_CONNECTION_REFUSED"))).toBe(false);
   });
 });

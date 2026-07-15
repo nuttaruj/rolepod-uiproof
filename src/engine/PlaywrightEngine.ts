@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { resolve as resolvePath, isAbsolute } from "node:path";
+import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
+import { resolve as resolvePath, isAbsolute, dirname } from "node:path";
 import {
   chromium,
   firefox,
@@ -42,6 +44,20 @@ import type {
  */
 export function resolveHeadless(env: NodeJS.ProcessEnv): boolean {
   return env.ROLEPOD_HEADED !== "1";
+}
+
+/**
+ * True when a launch failed because the browser binary isn't downloaded — the
+ * signature of a fresh install or a Playwright version bump that changed the
+ * required browser build. Triggers a one-time auto-install.
+ */
+export function isMissingBrowserError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    /Executable doesn't exist/i.test(msg) ||
+    /playwright install/i.test(msg) ||
+    /please run the following command to download/i.test(msg)
+  );
 }
 
 /**
@@ -244,7 +260,7 @@ export class PlaywrightEngine implements Engine {
           : chromium;
 
     const headless = opts.headless ?? resolveHeadless(process.env);
-    const browser = await launcher.launch({ headless });
+    const browser = await this.launchWithAutoInstall(launcher, browserName, headless);
 
     const contextOptions: Parameters<typeof browser.newContext>[0] = {};
     if (opts.viewport) contextOptions.viewport = opts.viewport;
@@ -418,6 +434,61 @@ export class PlaywrightEngine implements Engine {
       const classified = classifyActionTimeout(what, err);
       if (classified) throw classified;
       throw err;
+    }
+  }
+
+  private readonly installedThisSession = new Set<string>();
+
+  /**
+   * Launch, and if the browser binary isn't downloaded (fresh install or a
+   * Playwright version bump that changed the required build), auto-install it
+   * once and retry — so `npx @rolepod/uiproof` just works instead of erroring
+   * with "Executable doesn't exist". Opt out with ROLEPOD_NO_AUTO_INSTALL=1.
+   */
+  private async launchWithAutoInstall(
+    launcher: typeof chromium | typeof firefox | typeof webkit,
+    browserName: string,
+    headless: boolean,
+  ): Promise<Browser> {
+    try {
+      return await launcher.launch({ headless });
+    } catch (err) {
+      if (
+        !isMissingBrowserError(err) ||
+        process.env.ROLEPOD_NO_AUTO_INSTALL === "1" ||
+        this.installedThisSession.has(browserName)
+      ) {
+        throw err;
+      }
+      log.warn(
+        "browser binary missing — auto-installing (first run / Playwright version drift). This one-time download may take a minute.",
+        { browser: browserName },
+      );
+      this.installBrowser(browserName);
+      this.installedThisSession.add(browserName);
+      return await launcher.launch({ headless });
+    }
+  }
+
+  private installBrowser(browserName: string): void {
+    const require = createRequire(import.meta.url);
+    const cli = resolvePath(dirname(require.resolve("playwright")), "cli.js");
+    // For chromium also fetch the headless-shell (a separate download used by
+    // headless launches); firefox/webkit have no separate shell.
+    const targets =
+      browserName === "chromium"
+        ? ["chromium", "chromium-headless-shell"]
+        : [browserName];
+    const res = spawnSync(process.execPath, [cli, "install", ...targets], {
+      stdio: "inherit",
+      timeout: 300_000,
+    });
+    if (res.status !== 0) {
+      throw new RolepodMcpError(
+        "engine_error",
+        `Auto-install of the ${browserName} browser failed (exit ${res.status ?? res.signal}). Run \`npx playwright install ${browserName}\` manually, or set ROLEPOD_NO_AUTO_INSTALL=1 to disable auto-install and surface the raw launch error.`,
+        { browser: browserName },
+      );
     }
   }
 
