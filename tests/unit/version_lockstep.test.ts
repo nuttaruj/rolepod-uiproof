@@ -25,8 +25,11 @@ const MANIFESTS = [
 ];
 
 // Files that carry `@rolepod/uiproof@<v>` pinned spawn specs.
+// NOTE: the root .mcp.json is intentionally absent — inside this repo the
+// dev server runs the local build (`node dist/bin/…`), because `npm exec`
+// treats an npx spec matching the repo's own name@version as "already
+// installed" and never fetches it, so a pinned spawn can't work here.
 const PIN_FILES = [
-  ".mcp.json",
   ".cursor/mcp.json",
   "gemini-extension.json",
   ".claude-plugin/plugin.json",

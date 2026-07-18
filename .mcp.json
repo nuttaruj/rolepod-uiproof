@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "rolepod-uiproof": {
-      "command": "npx",
-      "args": ["-y", "@rolepod/uiproof@0.14.1"],
+      "command": "node",
+      "args": ["dist/bin/rolepod-uiproof.js"],
       "env": {}
     }
   }
