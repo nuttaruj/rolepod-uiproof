@@ -1,7 +1,14 @@
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { homedir, platform as osPlatform } from "node:os";
 import { chromium } from "playwright";
+import {
+  isAppiumReachable,
+  parseInstalledDrivers,
+  resolveAppiumCommand,
+  type AppiumCommand,
+} from "../engine/appiumProvision.js";
 
 export type Check = {
   name: string;
@@ -30,16 +37,23 @@ export async function runDoctor(): Promise<number> {
   // webdriverio (optional)
   checks.push(await checkWebdriverIO());
 
+  // Appium binary + installed drivers (auto-provisioned on demand)
+  const appiumCmd = resolveAppiumCommand();
+  checks.push(checkAppiumBinary(appiumCmd));
+  if (appiumCmd) checks.push(checkAppiumDrivers(appiumCmd));
+
   // Appium server reachable
   checks.push(await checkAppiumServer());
 
-  // Xcode (macOS only, for iOS testing — roadmap v0.3)
+  // Xcode + simulators (macOS only, for iOS testing)
   if (osPlatform() === "darwin") {
     checks.push(checkXcode());
+    checks.push(checkIosSimulators());
   }
 
-  // Android SDK (roadmap v0.3)
+  // Android SDK + connected devices
   checks.push(checkAndroidSdk());
+  checks.push(checkAndroidDevices());
 
   // SeleniumEngine status — explicitly roadmap v0.4
   checks.push({
@@ -103,55 +117,122 @@ async function checkWebdriverIO(): Promise<Check> {
   try {
     const url = await import.meta.resolve?.("webdriverio");
     return {
-      name: "webdriverio (mobile client, v0.3)",
+      name: "webdriverio (mobile client)",
       status: "ok",
       detail: url ?? "resolved",
     };
   } catch {
     return {
-      name: "webdriverio (mobile client, v0.3)",
+      name: "webdriverio (mobile client)",
       status: "warn",
       detail:
-        "Not installed — web works fine without it. Mobile is roadmap v0.3. For mobile: npm i webdriverio",
+        "Not installed — web works fine without it. For mobile: npm i webdriverio",
     };
   }
+}
+
+function checkAppiumBinary(cmd: AppiumCommand | null): Check {
+  if (cmd) {
+    return {
+      name: "Appium (mobile server)",
+      status: "ok",
+      detail: `found via ${cmd.source} install`,
+    };
+  }
+  return {
+    name: "Appium (mobile server)",
+    status: "warn",
+    detail:
+      "Not installed — auto-installed on the first mobile session (or run: npx @rolepod/uiproof install:mobile). Web is unaffected.",
+  };
+}
+
+function checkAppiumDrivers(cmd: AppiumCommand): Check {
+  const res = spawnSync(cmd.exec, [...cmd.args, "driver", "list", "--installed", "--json"], {
+    encoding: "utf8",
+    timeout: 30_000,
+    env: { ...process.env, ...cmd.env },
+  });
+  const drivers = parseInstalledDrivers(
+    `${String(res.stdout ?? "")}\n${String(res.stderr ?? "")}`.trim().replace(/^[^{[]*/, ""),
+  );
+  if (drivers.length > 0) {
+    return { name: "Appium drivers", status: "ok", detail: drivers.join(", ") };
+  }
+  return {
+    name: "Appium drivers",
+    status: "warn",
+    detail:
+      "None installed — auto-installed on first mobile session (xcuitest for iOS, uiautomator2 for Android).",
+  };
 }
 
 async function checkAppiumServer(): Promise<Check> {
   const host = process.env.APPIUM_HOST ?? "127.0.0.1";
   const port = Number(process.env.APPIUM_PORT ?? 4723);
-  const path = process.env.APPIUM_BASE_PATH ?? "/";
-  const url = `http://${host}:${port}${path.endsWith("/") ? path : path + "/"}status`;
-  try {
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 1500);
-    const res = await fetch(url, { signal: ctrl.signal });
-    clearTimeout(timeout);
+  const basePath = process.env.APPIUM_BASE_PATH ?? "/";
+  const up = await isAppiumReachable({ host, port, basePath });
+  if (up) {
     return {
-      name: "Appium server (roadmap v0.3)",
-      status: res.ok ? "ok" : "warn",
-      detail: `${url} → HTTP ${res.status}`,
-    };
-  } catch {
-    return {
-      name: "Appium server (roadmap v0.3)",
-      status: "warn",
-      detail: `Not reachable at ${url} — mobile sessions need a running Appium daemon. Web sessions are unaffected.`,
+      name: "Appium server",
+      status: "ok",
+      detail: `reachable at ${host}:${port}`,
     };
   }
+  return {
+    name: "Appium server",
+    status: "warn",
+    detail: `Not running at ${host}:${port} — auto-started on the first mobile session. Web sessions are unaffected.`,
+  };
 }
 
 function checkXcode(): Check {
   const path = "/Applications/Xcode.app";
   if (existsSync(path)) {
-    return { name: "Xcode (iOS, roadmap v0.3)", status: "ok", detail: path };
+    return { name: "Xcode (iOS)", status: "ok", detail: path };
   }
   return {
-    name: "Xcode (iOS, roadmap v0.3)",
+    name: "Xcode (iOS)",
     status: "warn",
     detail:
       "Install Xcode via the App Store; required for iOS simulators. Not needed for web targets.",
   };
+}
+
+function checkIosSimulators(): Check {
+  const name = "iOS simulators";
+  // Generous timeout: the first simctl call after an Xcode/CLT update
+  // restarts the CoreSimulator service and can take tens of seconds.
+  const res = spawnSync("xcrun", ["simctl", "list", "devices", "available", "-j"], {
+    encoding: "utf8",
+    timeout: 45_000,
+  });
+  if (res.status !== 0) {
+    return {
+      name,
+      status: "warn",
+      detail: "`xcrun simctl` failed — install Xcode Command Line Tools for iOS testing.",
+    };
+  }
+  const count = countAvailableSimulators(String(res.stdout ?? ""));
+  if (count > 0) {
+    return { name, status: "ok", detail: `${count} available` };
+  }
+  return {
+    name,
+    status: "warn",
+    detail: "No simulators — Xcode → Settings → Platforms → install an iOS runtime.",
+  };
+}
+
+/** Pure parser for `simctl list devices available -j` — unit-testable. */
+export function countAvailableSimulators(jsonText: string): number {
+  try {
+    const parsed = JSON.parse(jsonText) as { devices?: Record<string, unknown[]> };
+    return Object.values(parsed.devices ?? {}).reduce((n, list) => n + list.length, 0);
+  } catch {
+    return 0;
+  }
 }
 
 function checkAndroidSdk(): Check {
@@ -163,15 +244,44 @@ function checkAndroidSdk(): Check {
   ].filter((x): x is string => typeof x === "string");
   for (const path of candidates) {
     if (existsSync(path)) {
-      return { name: "Android SDK (roadmap v0.3)", status: "ok", detail: path };
+      return { name: "Android SDK", status: "ok", detail: path };
     }
   }
   return {
-    name: "Android SDK (roadmap v0.3)",
+    name: "Android SDK",
     status: "warn",
     detail:
       "Set ANDROID_HOME — needed only for Android testing. Not needed for web or iOS targets.",
   };
+}
+
+function checkAndroidDevices(): Check {
+  const name = "Android devices (adb)";
+  const res = spawnSync("adb", ["devices"], { encoding: "utf8", timeout: 15_000 });
+  if (res.status !== 0 || res.error) {
+    return {
+      name,
+      status: "warn",
+      detail: "adb not on PATH — needed only for Android testing.",
+    };
+  }
+  const count = countAdbDevices(String(res.stdout ?? ""));
+  if (count > 0) {
+    return { name, status: "ok", detail: `${count} connected` };
+  }
+  return {
+    name,
+    status: "warn",
+    detail: "No emulator/device connected — start one before an android session.",
+  };
+}
+
+/** Pure parser for `adb devices` output — unit-testable. */
+export function countAdbDevices(stdout: string): number {
+  return stdout
+    .split("\n")
+    .slice(1) // "List of devices attached" header
+    .filter((l) => /\tdevice$/.test(l.trim().replace(/\s+/, "\t"))).length;
 }
 
 function checkArtifactDir(): Check {

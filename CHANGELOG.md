@@ -7,6 +7,52 @@ release.
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-07-18
+
+Mobile reaches parity with web onboarding: the Appium stack now
+self-provisions the same way browsers do.
+
+### Added
+
+- **Auto-provision Appium on first mobile session.** When an `ios`/`android`
+  session fails with a connection-level error against a loopback host, the
+  engine now locates Appium (PATH → project `node_modules` → managed install),
+  installs it into `~/.rolepod-uiproof/appium` via npm if missing, ensures the
+  platform driver (`xcuitest` / `uiautomator2`) is installed, starts the
+  daemon, waits for `/status`, and retries the session once. The spawned daemon
+  is killed on server exit. A remote `APPIUM_HOST` is never provisioned
+  locally. Opt out with `ROLEPOD_NO_AUTO_APPIUM=1`.
+- **`install:mobile` now actually installs.** The subcommand provisions Appium
+  + drivers (xcuitest only on macOS) instead of only printing a checklist; the
+  old behavior moved to `install:mobile --checklist`. Xcode and the Android SDK
+  remain the only manual steps and are printed as such.
+- **Doctor mobile checks.** New checks: Appium binary (with install source),
+  installed Appium drivers, available iOS simulators (`xcrun simctl`), and
+  connected Android devices (`adb devices`). Stale "roadmap v0.3" labels
+  removed — mobile has been live since 0.3.
+
+### Fixed
+
+- **Session-open errors now distinguish "no server" from "no device".** A
+  capability/device failure reported by a live Appium server no longer suggests
+  the server isn't running; after an auto-provision retry the error says the
+  server was started and points at device/simulator availability instead — and
+  a retry that is itself a connection failure reports the auto-started server
+  as unresponsive rather than misdirecting at devices.
+- **Windows spawns.** `.cmd` shims (`appium.cmd`, `npm.cmd`) are spawned with
+  `shell: true` — Node ≥20.12 (CVE-2024-27980 fix) throws EINVAL otherwise,
+  which would have broken every mobile code path on Windows. Endpoint values
+  that reach spawn args (`APPIUM_BASE_PATH`, `APPIUM_PORT`) are validated to a
+  safe shape first.
+- **Provisioning is serialized.** Two mobile sessions opened concurrently can
+  no longer race to spawn two daemons on the same port and leak one.
+- **Daemon lifecycle.** An auto-started Appium daemon is killed on server
+  shutdown, on process exit, and when the MCP host closes the stdio pipe
+  without signaling (previously an orphaned daemon + MCP process could
+  outlive the host).
+- **`browser_pages` no longer leaves an unhandled rejection** when a page
+  closes between listing and awaiting its title.
+
 ## [0.13.1] — 2026-07-15
 
 Onboarding fix: browsers now self-provision.

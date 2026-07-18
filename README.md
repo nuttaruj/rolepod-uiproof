@@ -38,7 +38,7 @@ Every skill is **single-backend** (D-024) — it calls the rolepod-uiproof serve
 
 **Combined with rolepod parent**: when the parent's SessionStart hook drops the marker file `<git-root>/.rolepod/parent-active` (single line of content = the protocol version, e.g. `v1`), uiproof writes evidence to `<git-root>/.rolepod/evidence/<ts>-rolepod-uiproof-<skill>/` instead, where parent's `check-work` skill auto-aggregates manifests into the verify report. The marker is re-detected per run, so a marker the parent writes after this server has already started is still honoured; no env-var, no daemon. To force combined mode without a parent session: `mkdir -p .rolepod && echo v1 > .rolepod/parent-active`. No skill changes — same 30 tools, same 8 skills, smarter routing.
 
-**Offline / registry-blocked machines**: the spawn configs fetch `@rolepod/uiproof` via `npx`, which needs npm-registry access. On an air-gapped or registry-blocked host, install once with `npm i -g @rolepod/uiproof@0.13.1` and set the MCP `command` to the global `rolepod-uiproof` binary (drop the `npx` / `-y` args) so no fetch is required at spawn time.
+**Offline / registry-blocked machines**: the spawn configs fetch `@rolepod/uiproof` via `npx`, which needs npm-registry access. On an air-gapped or registry-blocked host, install once with `npm i -g @rolepod/uiproof@0.14.0` and set the MCP `command` to the global `rolepod-uiproof` binary (drop the `npx` / `-y` args) so no fetch is required at spawn time.
 
 | Install | Unlocks |
 |---|---|
@@ -159,7 +159,7 @@ Open Antigravity Settings → Customizations → **Open MCP Config** (or edit `~
   "mcpServers": {
     "rolepod-uiproof": {
       "command": "npx",
-      "args": ["-y", "@rolepod/uiproof@0.13.1"]
+      "args": ["-y", "@rolepod/uiproof@0.14.0"]
     }
   }
 }
@@ -181,7 +181,7 @@ Use this when your tool reads a standard `mcpServers` config (most non-CLI MCP c
   "mcpServers": {
     "rolepod-uiproof": {
       "command": "npx",
-      "args": ["-y", "@rolepod/uiproof@0.13.1"]
+      "args": ["-y", "@rolepod/uiproof@0.14.0"]
     }
   }
 }
@@ -222,15 +222,39 @@ npx @rolepod/uiproof doctor
 ```
 ✓ Node ≥20                       24.14.0
 ✓ Playwright Chromium installed  ~/Library/Caches/ms-playwright
-✓ webdriverio (mobile client, v0.3)
-• Appium server (roadmap v0.3)   Not reachable at http://127.0.0.1:4723/status
-✓ Xcode (iOS, roadmap v0.3)      /Applications/Xcode.app
-• Android SDK (roadmap v0.3)     Set ANDROID_HOME — needed only for Android
+✓ webdriverio (mobile client)
+✓ Appium (mobile server)         found via path install
+✓ Appium drivers                 uiautomator2, xcuitest
+• Appium server                  Not running at 127.0.0.1:4723 — auto-started on first mobile session
+✓ Xcode (iOS)                    /Applications/Xcode.app
+✓ iOS simulators                 4 available
+• Android SDK                    Set ANDROID_HOME — needed only for Android
+• Android devices (adb)          No emulator/device connected
 • SeleniumEngine (roadmap v0.4)  Not implemented — deferred to v0.4
 ✓ Artifact root writable
 ```
 
 `✓` = ready · `•` = optional / deferred · `✗` = blocker.
+
+## Mobile (iOS / Android)
+
+Mobile is auto-provisioned the same way browsers are: the first `ios`/`android`
+session installs Appium + the platform driver if missing and starts the daemon
+for you. Or provision ahead of time:
+
+```bash
+npx @rolepod/uiproof install:mobile              # installs Appium + drivers now
+npx @rolepod/uiproof install:mobile --checklist  # just print the manual steps
+```
+
+Only two things can't be automated and stay manual:
+
+- **iOS** — Xcode + an iOS Simulator (macOS only). Verify: `xcrun simctl list devices`
+- **Android** — Android SDK with `ANDROID_HOME` set + a running emulator/device. Verify: `adb devices`
+
+Environment overrides: `APPIUM_HOST` / `APPIUM_PORT` / `APPIUM_BASE_PATH` point at
+an existing Appium server (a remote host disables auto-start);
+`ROLEPOD_NO_AUTO_APPIUM=1` turns auto-provisioning off entirely.
 
 ## What's inside
 

@@ -1115,7 +1115,9 @@ export class PlaywrightEngine implements Engine {
     return s.pages.map((p, i) => ({
       index: i,
       url: p.url(),
-      title_promise: p.title(),
+      // A page can close between listing and awaiting the title — degrade
+      // to "" instead of leaving an unhandled rejection behind.
+      title_promise: p.title().catch(() => ""),
       active: i === s.activePageIndex,
     }));
   }

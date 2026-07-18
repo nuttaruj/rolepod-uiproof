@@ -11,6 +11,12 @@ import {
   type AndroidRefMeta,
 } from "./a11y/uiautomator2.js";
 import { parseXcuiTestTree, type IosRefMeta } from "./a11y/xcuitest.js";
+import {
+  autoAppiumDisabled,
+  ensureAppiumUp,
+  isAppiumConnectionError,
+  isLoopbackHost,
+} from "./appiumProvision.js";
 import type {
   A11ySnapshot,
   Direction,
@@ -92,15 +98,48 @@ export class AppiumEngine implements Engine {
     const host = process.env.APPIUM_HOST ?? "127.0.0.1";
     const port = Number(process.env.APPIUM_PORT ?? 4723);
     const path = process.env.APPIUM_BASE_PATH ?? "/";
-    let driver: WdioBrowser;
-    try {
-      driver = await remote({ hostname: host, port, path, capabilities: caps });
-    } catch (err) {
-      throw new RolepodMcpError(
+    const connect = () => remote({ hostname: host, port, path, capabilities: caps });
+    const wrap = (err: unknown, provisioned: boolean) =>
+      new RolepodMcpError(
         "engine_error",
-        `Could not start an Appium session (${err instanceof Error ? err.message : String(err)}). Check that the Appium server is running at ${host}:${port}${path} and a ${opts.platform} device/simulator is available and matches the capabilities.`,
+        `Could not start an Appium session (${err instanceof Error ? err.message : String(err)}). ` +
+          (provisioned
+            ? `The Appium server was auto-started at ${host}:${port}${path} but the session still failed — check that a ${opts.platform} device/simulator is available and matches the capabilities.`
+            : `Check that the Appium server is running at ${host}:${port}${path} and a ${opts.platform} device/simulator is available and matches the capabilities.`),
         { platform: opts.platform },
       );
+    let driver: WdioBrowser;
+    try {
+      driver = await connect();
+    } catch (err) {
+      // Mobile analog of the browser auto-install: a connection-level
+      // failure against a loopback host means "no server there" — so
+      // provision one (install appium + driver if needed, start the
+      // daemon) and retry ONCE. Anything else keeps the original error.
+      if (
+        !isAppiumConnectionError(err) ||
+        autoAppiumDisabled() ||
+        !isLoopbackHost(host)
+      ) {
+        throw wrap(err, false);
+      }
+      await ensureAppiumUp(opts.platform, { host, port, basePath: path });
+      try {
+        driver = await connect();
+      } catch (retryErr) {
+        // Still a connection error after provisioning → the auto-started
+        // server died; don't misdirect the user at device availability.
+        if (isAppiumConnectionError(retryErr)) {
+          throw new RolepodMcpError(
+            "engine_error",
+            `The Appium server was auto-started at ${host}:${port}${path} but stopped responding ` +
+              `(${retryErr instanceof Error ? retryErr.message : String(retryErr)}). ` +
+              `Try starting it manually with \`appium\` to see its startup logs.`,
+            { platform: opts.platform },
+          );
+        }
+        throw wrap(retryErr, true);
+      }
     }
 
     const sessionId = randomUUID();

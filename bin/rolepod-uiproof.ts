@@ -11,7 +11,7 @@ const HELP = `rolepod-uiproof ${SERVER_VERSION}
 Usage:
   rolepod-uiproof                 Start the MCP server on stdio (default)
   rolepod-uiproof doctor          Health check (Node, Playwright, Appium, SDKs)
-  rolepod-uiproof install:mobile  Print mobile setup checklist (iOS / Android)
+  rolepod-uiproof install:mobile  Install Appium + drivers (add --checklist to only print steps)
   rolepod-uiproof replay <file>   Re-run a verify_ui_flow replay bundle
   rolepod-uiproof --version       Print version
   rolepod-uiproof --help          This help
@@ -29,7 +29,7 @@ async function main(): Promise<void> {
       return;
     case "install:mobile":
     case "install":
-      process.exit(runInstallMobile());
+      process.exit(await runInstallMobile(rest));
       return;
     case "replay": {
       const target = rest[0];
@@ -68,6 +68,11 @@ async function startServer(): Promise<void> {
   };
   process.on("SIGINT", () => void shutdown("SIGINT"));
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  // MCP hosts that die without signaling us just close the stdio pipe.
+  // Without this, spawned children (Appium daemon, browsers) would keep
+  // this process — and themselves — alive as orphans.
+  process.stdin.on("end", () => void shutdown("SIGHUP"));
+  process.stdin.on("close", () => void shutdown("SIGHUP"));
 
   await server.mcp.connect(transport);
   log.info("rolepod-uiproof connected on stdio");

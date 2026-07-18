@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { ArtifactStore } from "./artifact/ArtifactStore.js";
+import { stopManagedAppium } from "./engine/appiumProvision.js";
 import { createMobileEngine, createWebEngine } from "./engine/factory.js";
 import { SessionRegistry } from "./session/SessionRegistry.js";
 import { browserClickTool } from "./tools/atomic/browser_click.js";
@@ -39,7 +40,7 @@ import { log } from "./util/log.js";
 import { detectRolepodParent } from "./util/rolepodProtocol.js";
 
 export const SERVER_NAME = "rolepod-uiproof";
-export const SERVER_VERSION = "0.13.1";
+export const SERVER_VERSION = "0.14.0";
 
 /**
  * Extension Protocol version this build implements. Compared at server
@@ -172,6 +173,9 @@ export function buildServer(
     store,
     async shutdown() {
       await registry.shutdown();
+      // Kill an auto-started Appium daemon — the process "exit" hook only
+      // covers actual exits, not a graceful shutdown that keeps running.
+      stopManagedAppium();
       await mcp.close().catch(() => undefined);
     },
   };
