@@ -16,6 +16,7 @@ import {
   ensureAppiumUp,
   isAppiumConnectionError,
   isLoopbackHost,
+  preflightMobileHost,
 } from "./appiumProvision.js";
 import type {
   A11ySnapshot,
@@ -93,11 +94,16 @@ export class AppiumEngine implements Engine {
     if (opts.platform !== "ios" && opts.platform !== "android") {
       throw new UnsupportedPlatformError(opts.platform);
     }
-    const remote = await this.loadWdio();
-    const caps = this.buildCapabilities(opts);
     const host = process.env.APPIUM_HOST ?? "127.0.0.1";
     const port = Number(process.env.APPIUM_PORT ?? 4723);
     const path = process.env.APPIUM_BASE_PATH ?? "/";
+    // Fail fast with actionable guidance if the host is missing Xcode /
+    // the Android SDK — otherwise those surface as cryptic driver errors
+    // deep inside appium. A remote APPIUM_HOST brings its own devices, so
+    // only loopback endpoints are preflighted.
+    if (isLoopbackHost(host)) preflightMobileHost(opts.platform);
+    const remote = await this.loadWdio();
+    const caps = this.buildCapabilities(opts);
     const connect = () => remote({ hostname: host, port, path, capabilities: caps });
     const wrap = (err: unknown, provisioned: boolean) =>
       new RolepodMcpError(

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { countAdbDevices, countAvailableSimulators } from "../../src/cli/doctor.js";
 import {
+  androidHostProblem,
   assertSafeEndpoint,
   driverForPlatform,
+  iosHostProblem,
   isAppiumConnectionError,
   isLoopbackHost,
   parseInstalledDrivers,
@@ -106,6 +108,32 @@ describe("assertSafeEndpoint — spawn args are validated before use", () => {
     expect(() =>
       assertSafeEndpoint({ host: "127.0.0.1", port: 70_000, basePath: "/" }),
     ).toThrow(/APPIUM_PORT/);
+  });
+});
+
+describe("host preflight classifiers — missing Xcode / Android SDK fail fast with guidance", () => {
+  it("iosHostProblem: non-mac host is rejected outright", () => {
+    expect(iosHostProblem("linux", null)).toMatch(/macOS host/);
+    expect(iosHostProblem("win32", null)).toMatch(/macOS host/);
+  });
+
+  it("iosHostProblem: Command Line Tools alone are not enough", () => {
+    expect(iosHostProblem("darwin", "/Library/Developer/CommandLineTools\n")).toMatch(
+      /Install Xcode/,
+    );
+    expect(iosHostProblem("darwin", null)).toMatch(/Install Xcode/);
+  });
+
+  it("iosHostProblem: full Xcode passes", () => {
+    expect(iosHostProblem("darwin", "/Applications/Xcode.app/Contents/Developer\n")).toBeNull();
+  });
+
+  it("androidHostProblem: needs SDK dir or adb, either is enough", () => {
+    expect(androidHostProblem({ sdkDirExists: false, adbOnPath: false })).toMatch(
+      /ANDROID_HOME/,
+    );
+    expect(androidHostProblem({ sdkDirExists: true, adbOnPath: false })).toBeNull();
+    expect(androidHostProblem({ sdkDirExists: false, adbOnPath: true })).toBeNull();
   });
 });
 

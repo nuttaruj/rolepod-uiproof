@@ -4,6 +4,7 @@ import { resolve, join } from "node:path";
 import { homedir, platform as osPlatform } from "node:os";
 import { chromium } from "playwright";
 import {
+  androidSdkCandidates,
   isAppiumReachable,
   parseInstalledDrivers,
   resolveAppiumCommand,
@@ -236,13 +237,7 @@ export function countAvailableSimulators(jsonText: string): number {
 }
 
 function checkAndroidSdk(): Check {
-  const candidates = [
-    process.env.ANDROID_HOME,
-    process.env.ANDROID_SDK_ROOT,
-    join(homedir(), "Library", "Android", "sdk"),
-    join(homedir(), "Android", "Sdk"),
-  ].filter((x): x is string => typeof x === "string");
-  for (const path of candidates) {
+  for (const path of androidSdkCandidates()) {
     if (existsSync(path)) {
       return { name: "Android SDK", status: "ok", detail: path };
     }

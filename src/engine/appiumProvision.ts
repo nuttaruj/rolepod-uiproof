@@ -97,6 +97,81 @@ export function driverForPlatform(platform: "ios" | "android"): "xcuitest" | "ui
   return platform === "ios" ? "xcuitest" : "uiautomator2";
 }
 
+// ---------------------------------------------------------------------------
+// Host preflight — the ONE thing auto-provisioning can't fix is a missing
+// Xcode / Android SDK. Without these checks a user without them gets a
+// cryptic appium/wdio failure and no idea what to install; with them the
+// session fails fast with the exact manual step. Pure classifiers below
+// are unit-tested; the spawning wrapper stays thin.
+// ---------------------------------------------------------------------------
+
+/** Null when the host can run iOS simulators; otherwise the user-facing problem. */
+export function iosHostProblem(os: string, xcodeSelectOut: string | null): string | null {
+  if (os !== "darwin") {
+    return "iOS sessions need a macOS host with Xcode — this machine cannot run an iOS simulator.";
+  }
+  if (!xcodeSelectOut || !/\.app\/Contents\/Developer\/?$/.test(xcodeSelectOut.trim())) {
+    return (
+      "iOS testing needs full Xcode — it is not installed (Command Line Tools alone cannot run simulators). " +
+      "Install Xcode from the App Store, open it once to finish setup, then Xcode → Settings → Platforms → add an iOS Simulator runtime. " +
+      "Verify with: xcrun simctl list devices"
+    );
+  }
+  return null;
+}
+
+/** Null when Android tooling is reachable; otherwise the user-facing problem. */
+export function androidHostProblem(opts: {
+  sdkDirExists: boolean;
+  adbOnPath: boolean;
+}): string | null {
+  if (opts.adbOnPath || opts.sdkDirExists) return null;
+  return (
+    "Android testing needs the Android SDK — it is not installed (no ANDROID_HOME and no adb on PATH). " +
+    "Install Android Studio (or the command-line tools), set ANDROID_HOME to the SDK path, and start an emulator or connect a device. " +
+    "Verify with: adb devices"
+  );
+}
+
+/** SDK locations shared with `doctor` — env overrides first, then defaults. */
+export function androidSdkCandidates(): string[] {
+  return [
+    process.env.ANDROID_HOME,
+    process.env.ANDROID_SDK_ROOT,
+    join(homedir(), "Library", "Android", "sdk"),
+    join(homedir(), "Android", "Sdk"),
+  ].filter((x): x is string => typeof x === "string");
+}
+
+/**
+ * Fail fast with actionable guidance when the host is missing the one
+ * prerequisite we cannot install (Xcode / Android SDK). Only meaningful
+ * for loopback endpoints — a remote Appium farm brings its own devices.
+ * Checks are cheap (one short spawnSync + existsSync), so no caching:
+ * installing the missing piece works on the next attempt without a
+ * server restart.
+ */
+export function preflightMobileHost(platform: "ios" | "android"): void {
+  let problem: string | null;
+  if (platform === "ios") {
+    const sel = spawnSync("xcode-select", ["-p"], { encoding: "utf8", timeout: 10_000 });
+    problem = iosHostProblem(
+      osPlatform(),
+      sel.status === 0 ? String(sel.stdout ?? "") : null,
+    );
+  } else {
+    const adbExec = osPlatform() === "win32" ? "adb.exe" : "adb";
+    const adb = spawnSync(adbExec, ["--version"], { encoding: "utf8", timeout: 10_000 });
+    problem = androidHostProblem({
+      sdkDirExists: androidSdkCandidates().some((p) => existsSync(p)),
+      adbOnPath: adb.status === 0,
+    });
+  }
+  if (problem) {
+    throw new RolepodMcpError("engine_error", problem, { platform });
+  }
+}
+
 /**
  * Parse `appium driver list --installed --json` output. Appium 2 prints
  * an object keyed by driver name. Anything unparseable → empty list (the
@@ -368,13 +443,7 @@ async function doEnsureAppiumUp(
   platform: "ios" | "android",
   ep: AppiumEndpoint,
 ): Promise<void> {
-  if (platform === "ios" && osPlatform() !== "darwin") {
-    throw new RolepodMcpError(
-      "engine_error",
-      "iOS sessions need a macOS host with Xcode — this machine cannot run an iOS simulator.",
-      { platform },
-    );
-  }
+  preflightMobileHost(platform);
   const driver = driverForPlatform(platform);
 
   if (await isAppiumReachable(ep)) {

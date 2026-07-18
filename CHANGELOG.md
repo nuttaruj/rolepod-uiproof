@@ -30,6 +30,13 @@ self-provisions the same way browsers do.
   installed Appium drivers, available iOS simulators (`xcrun simctl`), and
   connected Android devices (`adb devices`). Stale "roadmap v0.3" labels
   removed — mobile has been live since 0.3.
+- **Host preflight with actionable errors.** Opening an `ios` session without
+  full Xcode (or on a non-mac), or an `android` session without the Android
+  SDK / adb, now fails in milliseconds with the exact install steps — instead
+  of a cryptic driver error from deep inside Appium. Only loopback endpoints
+  are preflighted; a remote `APPIUM_HOST` farm brings its own devices. No
+  caching, so installing the missing piece works on the next attempt without
+  a server restart.
 
 ### Fixed
 
