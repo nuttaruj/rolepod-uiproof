@@ -143,28 +143,51 @@ export function androidSdkCandidates(): string[] {
   ].filter((x): x is string => typeof x === "string");
 }
 
+/** Probe spawn hit its timeout (as opposed to ENOENT / a real non-zero exit). */
+function probeTimedOut(res: ReturnType<typeof spawnSync>): boolean {
+  return (
+    res.error !== undefined &&
+    (res.error as NodeJS.ErrnoException).code === "ETIMEDOUT"
+  );
+}
+
 /**
  * Fail fast with actionable guidance when the host is missing the one
  * prerequisite we cannot install (Xcode / Android SDK). Only meaningful
  * for loopback endpoints — a remote Appium farm brings its own devices.
- * Checks are cheap (one short spawnSync + existsSync), so no caching:
- * installing the missing piece works on the next attempt without a
- * server restart.
+ *
+ * Absence detection is existence-based (ENOENT / missing dir), NOT
+ * timing-based — a slow machine cannot false-fail. The generous 10s probe
+ * timeout only guards against a pathologically hung tool, and if it DOES
+ * expire we give the host the benefit of the doubt and let the real
+ * session attempt decide, rather than blocking on an inconclusive probe.
+ *
+ * Checks are cheap, so no caching: installing the missing piece works on
+ * the next attempt without a server restart.
  */
 export function preflightMobileHost(platform: "ios" | "android"): void {
   let problem: string | null;
   if (platform === "ios") {
-    const sel = spawnSync("xcode-select", ["-p"], { encoding: "utf8", timeout: 10_000 });
-    problem = iosHostProblem(
-      osPlatform(),
-      sel.status === 0 ? String(sel.stdout ?? "") : null,
-    );
+    // Non-mac verdict needs no probe at all.
+    problem = iosHostProblem(osPlatform(), null);
+    if (osPlatform() === "darwin") {
+      const sel = spawnSync("xcode-select", ["-p"], { encoding: "utf8", timeout: 10_000 });
+      if (probeTimedOut(sel)) {
+        log.warn("xcode-select probe timed out — skipping iOS preflight", {});
+        return;
+      }
+      problem = iosHostProblem(
+        osPlatform(),
+        sel.status === 0 ? String(sel.stdout ?? "") : null,
+      );
+    }
   } else {
     const adbExec = osPlatform() === "win32" ? "adb.exe" : "adb";
     const adb = spawnSync(adbExec, ["--version"], { encoding: "utf8", timeout: 10_000 });
     problem = androidHostProblem({
       sdkDirExists: androidSdkCandidates().some((p) => existsSync(p)),
-      adbOnPath: adb.status === 0,
+      // A timed-out probe is inconclusive, not proof of absence.
+      adbOnPath: adb.status === 0 || probeTimedOut(adb),
     });
   }
   if (problem) {

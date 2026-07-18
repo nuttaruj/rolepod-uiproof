@@ -99,9 +99,12 @@ export class AppiumEngine implements Engine {
     const path = process.env.APPIUM_BASE_PATH ?? "/";
     // Fail fast with actionable guidance if the host is missing Xcode /
     // the Android SDK — otherwise those surface as cryptic driver errors
-    // deep inside appium. A remote APPIUM_HOST brings its own devices, so
-    // only loopback endpoints are preflighted.
-    if (isLoopbackHost(host)) preflightMobileHost(opts.platform);
+    // deep inside appium. A remote APPIUM_HOST brings its own devices, and
+    // ROLEPOD_NO_AUTO_APPIUM=1 means "hands off my environment" — both
+    // skip the preflight.
+    if (isLoopbackHost(host) && !autoAppiumDisabled()) {
+      preflightMobileHost(opts.platform);
+    }
     const remote = await this.loadWdio();
     const caps = this.buildCapabilities(opts);
     const connect = () => remote({ hostname: host, port, path, capabilities: caps });
