@@ -99,6 +99,8 @@ Cross the wrong boundary and the reviewer will ask you to move the code.
       schema export, and skill lint allowlist?
 - [ ] `THIRD_PARTY.md` updated when a dep is added?
 - [ ] CHANGELOG entry under `## [Unreleased]`?
+- [ ] Minor release: playwright pin reviewed per `UPSTREAM_TRACKING.md`
+      (bump gets its own CHANGELOG line + baseline re-capture warning)?
 
 ## Reporting security issues
 

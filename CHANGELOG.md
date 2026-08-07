@@ -7,6 +7,28 @@ release.
 
 ## [Unreleased]
 
+### Added
+
+- **Manifest `phase` hint on `verify_ui_flow` and `audit_a11y`.** Both
+  composites accept an optional `phase` input (`verify` | `debug` | `build` |
+  `review`, default `verify`) that tags the emitted Extension Protocol v1
+  `manifest.json`. `/check-errors` invoked to trace a reported bug now passes
+  `phase: "debug"` so the parent's `debug-issue` skill picks the evidence up,
+  and `/audit-a11y` inside a code-review context passes `phase: "review"` for
+  the parent's `review-code` aggregation — previously every run was hardcoded
+  to the verify report.
+
+### Fixed
+
+- **`.gitignore` now covers `.rolepod/`** (parent marker + evidence), per the
+  Extension Protocol's own `.gitignore` guidance — this repo dogfoods the
+  parent plugin, so the marker and evidence dirs could previously leak into
+  commits. Also removed a duplicated runtime-artifacts block.
+- **`spawn_version_pin` test caught up with the dev-local `.mcp.json`.** The
+  root `.mcp.json` switched to spawning the local build in 0.14.1 (npx
+  self-resolution bug) but the spawn-pin lockstep test still demanded an npx
+  pin there, failing the suite on a clean checkout.
+
 ## [0.14.1] — 2026-07-18
 
 ### Added

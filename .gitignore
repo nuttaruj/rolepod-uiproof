@@ -9,6 +9,9 @@ dist/
 .rolepod-mcp/
 .rolepod-uiproof/
 
+# parent-plugin marker + evidence (Extension Protocol v1, dogfooding)
+.rolepod/
+
 # test + coverage
 coverage/
 .vitest-cache/
@@ -35,7 +38,3 @@ brief/
 
 # claude harness local state
 .claude/
-
-# runtime artifacts
-.rolepod-mcp/
-.rolepod-uiproof/

@@ -3,6 +3,26 @@
 Records the upstream sources that have informed rolepod-uiproof's design and
 implementation, so that future cherry-picks or audits can locate them.
 
+## playwright (exact pin)
+
+- **Current pin:** `1.60.0` (`package.json`, exact — no `^`)
+- **Why pinned:** the pin freezes the Chromium renderer so visual baselines
+  stay stable, and shields users from upstream releases landing mid-project.
+  The trade-off is that browser/security fixes do not arrive on their own.
+
+### Bump policy
+
+- **Cadence:** review the pin at every rolepod-uiproof **minor** release
+  (0.x → 0.x+1). Check Playwright's release notes for security/browser
+  fixes since the pinned version; bump unless a known regression blocks it.
+- **Out-of-band:** a Playwright security advisory affecting the pinned
+  version triggers an immediate patch release with the bumped pin — don't
+  wait for the next minor.
+- **Every bump** gets its own CHANGELOG line stating the old → new version
+  and this warning: *visual baselines may need re-capture — Chromium
+  rendering can shift between Playwright versions.*
+- After bumping, update **Current pin** above.
+
 ## alumnium-hq/alumnium (MIT)
 
 - **Repo:** https://github.com/alumnium-hq/alumnium
