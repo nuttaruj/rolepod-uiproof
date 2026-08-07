@@ -133,7 +133,7 @@ export const auditA11yTool: ToolModule<typeof auditA11yShape> = {
       const manifestPath = await writeManifest({
         runDir,
         skill,
-        phase: "verify",
+        phase: args.phase ?? "verify",
         status,
         summary: buildAuditSummary(args.level, counts, status),
         startedAt,

@@ -36,6 +36,8 @@ check before merging.
 - `exclude_request_patterns` *(optional)* — same idea for URLs.
 - `allow_4xx` *(optional, default false)* — if true, only 5xx counts as
   a failure. Useful when 4xx is part of the auth happy path.
+- `phase` *(optional)* — Extension Protocol phase hint for the emitted
+  `manifest.json`. Default `verify`.
 
 ## Process
 
@@ -53,6 +55,12 @@ Call `verify_ui_flow` with:
   "capture": ["screenshot", "console", "har"]
 }
 ```
+
+When the run is **tracing a reported error** (debugging context — the user
+is hunting a bug, not gating a merge), add `"phase": "debug"` so the
+evidence lands with the parent's `debug-issue` skill instead of the verify
+report. For the default merge-gate / smoke use, omit it (defaults to
+`verify`).
 
 Surface the result. On `passed: false`, point the user at `console.json`
 and `network.har` in `evidence_paths` so they can drill in.
@@ -114,7 +122,7 @@ Run artifacts are saved under:
 - **Standalone:** `.rolepod-uiproof/artifacts/<prefix>_<ts>_<uuid>/`
 - **With `rolepod` parent** (detected via the marker file `<git-root>/.rolepod/parent-active` written by the parent's SessionStart hook): `<git-root>/.rolepod/evidence/<ts>-rolepod-uiproof-<skill>/`
 
-Either way the run directory contains a `manifest.json` per Extension Protocol v1. Because `/check-errors` wraps `verify_ui_flow`, the manifest is written by the underlying composite tool — same shape, same fields.
+Either way the run directory contains a `manifest.json` per Extension Protocol v1. Because `/check-errors` wraps `verify_ui_flow`, the manifest is written by the underlying composite tool — same shape, same fields. When invoked with `"phase": "debug"` the manifest is tagged for the parent's `debug-issue` pickup instead of `check-work`'s verify report.
 
 ## If the tool is unavailable
 

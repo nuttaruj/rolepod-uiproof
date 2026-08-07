@@ -491,6 +491,13 @@ export const captureKindSchema = z.enum([
   "trace",
 ]);
 
+/**
+ * Extension Protocol v1 phase vocabulary. Mirrors `ManifestPhase` in
+ * `src/util/manifest.ts`; drift is caught at compile time where composites
+ * pass the parsed value into `writeManifest`.
+ */
+export const manifestPhaseSchema = z.enum(["verify", "debug", "build", "review"]);
+
 export const verifyUiFlowShape = {
   mode: z.enum(["assert", "reproduce"]).default("assert"),
   open: browserOpenSchema,
@@ -504,6 +511,12 @@ export const verifyUiFlowShape = {
    * step in turn and re-runs to find a smaller reproducer.
    */
   minimize: z.boolean().default(true),
+  /**
+   * Phase hint for the emitted manifest.json. The calling skill knows its
+   * context — /check-errors tracing a bug should tag evidence "debug" so the
+   * parent's debug-issue skill picks it up. Default: "verify".
+   */
+  phase: manifestPhaseSchema.optional(),
 } as const;
 export const verifyUiFlowSchema = z.object(verifyUiFlowShape);
 export type VerifyUiFlowInput = z.infer<typeof verifyUiFlowSchema>;
@@ -530,6 +543,12 @@ export const auditA11yShape = {
   scope: auditScopeSchema.default("page"),
   report_format: z.enum(["json", "markdown"]).default("json"),
   close_on_finish: z.boolean().default(true),
+  /**
+   * Phase hint for the emitted manifest.json. An a11y audit run inside a
+   * code-review context should tag evidence "review" so the parent's
+   * review-code skill aggregates it. Default: "verify".
+   */
+  phase: manifestPhaseSchema.optional(),
 } as const;
 export const auditA11ySchema = z.object(auditA11yShape);
 export type AuditA11yInput = z.infer<typeof auditA11ySchema>;

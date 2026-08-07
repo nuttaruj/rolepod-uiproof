@@ -80,7 +80,7 @@ export const verifyUiFlowTool: ToolModule<typeof verifyUiFlowShape> = {
       const manifestPath = await writeManifest({
         runDir,
         skill,
-        phase: "verify",
+        phase: args.phase ?? "verify",
         status: initial.passed ? "pass" : "fail",
         summary: buildVerifySummary(args, initial),
         startedAt,

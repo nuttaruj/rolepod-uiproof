@@ -26,6 +26,8 @@ MCP server. No fallback (D-024).
 - `target` — URL to audit.
 - `level` — `wcag-a` | `wcag-aa` | `wcag-aaa`. Default `wcag-aa`.
 - `report_format` — `json` | `markdown`. Default `json`.
+- `phase` *(optional)* — Extension Protocol phase hint for the emitted
+  `manifest.json`. Default `verify`.
 
 ## Outputs
 
@@ -39,6 +41,10 @@ MCP server. No fallback (D-024).
 1. Build `audit_a11y` input from the user's intent:
    - `open: { platform: 'web', url: <target> }`
    - `level`, `report_format`.
+   - When the audit runs as part of a **code review** (PR review, the
+     parent's `review-code` flow), add `"phase": "review"` so the evidence
+     lands in the review aggregation instead of the verify report. In a
+     plain verify/regression sweep, omit it (defaults to `verify`).
 2. Call the tool.
 3. Surface counts + critical/serious issues inline; reference the report
    path for the full list.
@@ -50,7 +56,7 @@ Run artifacts are saved under:
 - **Standalone:** `.rolepod-uiproof/artifacts/<prefix>_<ts>_<uuid>/`
 - **With `rolepod` parent** (detected via the marker file `<git-root>/.rolepod/parent-active` written by the parent's SessionStart hook): `<git-root>/.rolepod/evidence/<ts>-rolepod-uiproof-<skill>/`
 
-Either way the run directory contains a `manifest.json` per Extension Protocol v1, so the parent's `check-work` skill can aggregate results into the verify phase report. Standalone users can read the manifest themselves — same shape.
+Either way the run directory contains a `manifest.json` per Extension Protocol v1, so the parent's `check-work` skill can aggregate results into the verify phase report. When invoked with `"phase": "review"` the manifest is tagged for the parent's `review-code` aggregation instead. Standalone users can read the manifest themselves — same shape.
 
 ## If the tool is unavailable
 
