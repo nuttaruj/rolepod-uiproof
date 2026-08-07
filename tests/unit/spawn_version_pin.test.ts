@@ -21,8 +21,11 @@ const version = JSON.parse(
 ).version as string;
 
 // Files whose `npx` args spawn the MCP server in some client/marketplace.
+// Root `.mcp.json` is intentionally absent: it spawns the repo's own local
+// build (`node dist/bin/…`) so developing uiproof inside this repo doesn't
+// hit the self-referential npx resolution bug — same exclusion as
+// version_lockstep.test.ts.
 const SPAWN_CONFIGS = [
-  ".mcp.json",
   ".cursor/mcp.json",
   "gemini-extension.json",
   ".claude-plugin/plugin.json",
