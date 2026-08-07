@@ -2,7 +2,7 @@
   "mcpServers": {
     "rolepod-uiproof": {
       "command": "npx",
-      "args": ["-y", "@rolepod/uiproof@0.14.1"],
+      "args": ["-y", "@rolepod/uiproof@0.15.0"],
       "env": {}
     }
   }

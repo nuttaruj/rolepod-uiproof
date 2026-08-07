@@ -5,7 +5,7 @@ implementation, so that future cherry-picks or audits can locate them.
 
 ## playwright (exact pin)
 
-- **Current pin:** `1.60.0` (`package.json`, exact — no `^`)
+- **Current pin:** `1.62.1` (`package.json`, exact — no `^`)
 - **Why pinned:** the pin freezes the Chromium renderer so visual baselines
   stay stable, and shields users from upstream releases landing mid-project.
   The trade-off is that browser/security fixes do not arrive on their own.

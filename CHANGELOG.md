@@ -7,6 +7,8 @@ release.
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-08-07
+
 ### Added
 
 - **Manifest `phase` hint on `verify_ui_flow` and `audit_a11y`.** Both
@@ -17,6 +19,14 @@ release.
   and `/audit-a11y` inside a code-review context passes `phase: "review"` for
   the parent's `review-code` aggregation — previously every run was hardcoded
   to the verify report.
+
+### Changed
+
+- **Playwright pin bumped `1.60.0` → `1.62.1`** (first application of the new
+  bump policy in `UPSTREAM_TRACKING.md`). ⚠️ Visual baselines may need
+  re-capture — Chromium rendering can shift between Playwright versions; run
+  `/visual-diff` against your baselines after updating and re-capture any
+  that fail for rendering-only reasons.
 
 ### Fixed
 

@@ -1,6 +1,6 @@
 {
   "name": "rolepod-uiproof",
-  "version": "0.14.1",
+  "version": "0.15.0",
   "description": "Multi-platform UI/mobile automation for AI agents — 8 shipped skills (verify-ui, check-errors, audit-a11y, visual-diff, scaffold-e2e, measure-cwv, audit-page-budget, audit-seo) + MCP server with 30 tools. Works standalone OR with the `rolepod` parent plugin: when the marker file `<git-root>/.rolepod/parent-active` is present (written by the parent's SessionStart hook), evidence routes to `<git-root>/.rolepod/evidence/` with a `manifest.json` per Extension Protocol v1, so parent's `check-work` skill can aggregate UI verify results into its phase report. v0.5 completed the UI verification surface (console + network observability, hover/drag/fill_form/upload/dialog, runtime emulation, multi-page, gated JS eval).",
   "author": {
     "name": "nuttaruj",
@@ -19,7 +19,7 @@
   "mcpServers": {
     "rolepod-uiproof": {
       "command": "npx",
-      "args": ["-y", "@rolepod/uiproof@0.14.1"],
+      "args": ["-y", "@rolepod/uiproof@0.15.0"],
       "env": {}
     }
   }
