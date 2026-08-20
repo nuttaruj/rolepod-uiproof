@@ -86,6 +86,8 @@ const expected = [
   "measure_cwv",
   "audit_page_budget",
   "audit_seo",
+  // v0.16 black-box discovery (1)
+  "discover_flows",
 ];
 const missing = expected.filter((n) => !names.includes(n));
 const extra = names.filter((n) => !expected.includes(n));
