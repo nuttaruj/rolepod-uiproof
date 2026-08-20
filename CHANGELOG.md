@@ -7,6 +7,8 @@ release.
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-08-20
+
 ### Added
 
 - **`discover_flows` composite + `/discover-flows` skill — black-box flow

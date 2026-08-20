@@ -1,6 +1,6 @@
 {
   "name": "@rolepod/uiproof",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Multi-platform UI/mobile automation for AI agents — MCP server + shipped skills.",
   "keywords": [
     "mcp",
