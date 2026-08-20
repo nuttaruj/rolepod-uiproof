@@ -308,4 +308,20 @@ export const toolMetadata: Record<ToolName, ToolMetadata> = {
       openWorldHint: true,
     },
   },
+
+  // ---------- v0.16 black-box discovery ----------
+  [ToolNames.discoverFlows]: {
+    title: "Discover UI Flows (Black-Box Crawl)",
+    annotations: {
+      title: "Discover UI Flows",
+      // GET-navigation crawl; destructive-classified actions are never
+      // executed. Not readOnlyHint:true because opt-in `interact_forms`
+      // submits GET forms (dummy data) — still non-mutating by design,
+      // but the crawl autonomously issues requests the caller didn't list.
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+  },
 };

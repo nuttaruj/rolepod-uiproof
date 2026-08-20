@@ -46,6 +46,8 @@ const pairs = [
   ["measureCwv", lib.measureCwvSchema],
   ["auditPageBudget", lib.auditPageBudgetSchema],
   ["auditSeo", lib.auditSeoSchema],
+  // v0.16 black-box discovery
+  ["discoverFlows", lib.discoverFlowsSchema],
 ];
 
 const tools = {};

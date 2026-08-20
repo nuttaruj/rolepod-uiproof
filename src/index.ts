@@ -49,6 +49,7 @@ export {
   measureCwvShape,
   auditPageBudgetShape,
   auditSeoShape,
+  discoverFlowsShape,
   // z.object() schemas (for json-schema export / parsing)
   browserOpenSchema,
   browserCloseSchema,
@@ -80,6 +81,7 @@ export {
   measureCwvSchema,
   auditPageBudgetSchema,
   auditSeoSchema,
+  discoverFlowsSchema,
 } from "./schema/tools.js";
 export {
   RolepodMcpError,

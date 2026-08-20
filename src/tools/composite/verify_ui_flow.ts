@@ -408,7 +408,12 @@ async function minimize(
 // Step + expect evaluation helpers (shared with mode='assert').
 // ---------------------------------------------------------------------------
 
-async function runStep(
+/**
+ * Execute one verify-vocabulary step against a live session. Exported so
+ * other composites can reuse the exact step semantics — discover_flows runs
+ * its `setup_steps` (e.g. a login sequence) through this before crawling.
+ */
+export async function runStep(
   engine: Engine,
   session: Session,
   step: VerifyUiFlowInput["steps"][number],

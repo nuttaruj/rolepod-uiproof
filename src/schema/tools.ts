@@ -718,6 +718,55 @@ export const auditSeoSchema = z.object(auditSeoShape);
 export type AuditSeoInput = z.infer<typeof auditSeoSchema>;
 
 // ---------------------------------------------------------------------------
+// discover_flows — black-box flow discovery (brief/13-discover-flows.md)
+//
+// Crawls a running app like a user (GET navigation, same-origin by default),
+// enumerates pages / interactive elements, and derives candidate flows plus a
+// proposed test-case table. Read-only: destructive-looking actions (delete /
+// pay / send / publish, …) are classified and listed, never executed. Form
+// interaction is opt-in and limited to GET forms with dummy data — POST
+// submission would mutate the target and stays out of a read-only crawl.
+// ---------------------------------------------------------------------------
+
+export const discoverFlowsShape = {
+  url: z.string().url(),
+  browser: browserSchema.optional().default("chromium"),
+  viewport: viewportSchema.optional(),
+  /** Hard crawl budget — small defaults; crawling is time/token-expensive. */
+  max_pages: z.number().int().min(1).max(50).default(10),
+  max_depth: z.number().int().min(0).max(5).default(2),
+  max_time_ms: z.number().int().min(5000).max(300_000).default(60_000),
+  /**
+   * Regex allowlist for URLs beyond the start origin. Same-origin is always
+   * crawlable; anything else must match one of these.
+   */
+  allow_patterns: z.array(z.string().min(1)).optional(),
+  /** Regex denylist — wins over same-origin and allow_patterns. */
+  deny_patterns: z.array(z.string().min(1)).optional(),
+  /**
+   * Steps run once before the crawl starts (e.g. a login sequence) — the
+   * same step vocabulary /verify-ui uses, so an existing logged-in flow
+   * setup can be pasted in unchanged. Never raw credentials as config.
+   */
+  setup_steps: z.array(verifyStepSchema).optional(),
+  /**
+   * Opt-in: submit non-destructive GET forms with dummy data to discover
+   * result pages (search, filters). POST forms are always listed but never
+   * submitted — a black-box crawl must not mutate the target.
+   */
+  interact_forms: z.boolean().default(false),
+  report_format: z.enum(["json", "markdown"]).default("json"),
+  close_on_finish: z.boolean().default(true),
+  /**
+   * Phase hint for the emitted manifest.json. Discovery produces test-plan
+   * artifacts (like /scaffold-e2e), so the default is "build".
+   */
+  phase: manifestPhaseSchema.optional(),
+} as const;
+export const discoverFlowsSchema = z.object(discoverFlowsShape);
+export type DiscoverFlowsInput = z.infer<typeof discoverFlowsSchema>;
+
+// ---------------------------------------------------------------------------
 // Tool name registry — single source of truth for tool naming.
 // Bare names (no prefix); the MCP server namespace already scopes them.
 // ---------------------------------------------------------------------------
@@ -756,6 +805,8 @@ export const ToolNames = {
   measureCwv: "measure_cwv",
   auditPageBudget: "audit_page_budget",
   auditSeo: "audit_seo",
+  // v0.16 black-box discovery
+  discoverFlows: "discover_flows",
 } as const;
 
 export type ToolName = (typeof ToolNames)[keyof typeof ToolNames];

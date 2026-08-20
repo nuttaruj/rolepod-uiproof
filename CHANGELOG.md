@@ -7,6 +7,35 @@ release.
 
 ## [Unreleased]
 
+### Added
+
+- **`discover_flows` composite + `/discover-flows` skill — black-box flow
+  discovery** (brief/13-discover-flows.md). Crawls a running app like a user
+  (GET navigation, same-origin by default, regex allow/deny), enumerates
+  pages / links / forms / buttons, and returns: a flow map (JSON artifact +
+  optional markdown), a proposed test-case table with stable `TC1…` ids and
+  P1/P2 priority (same convention as the `/scaffold-e2e` handoff, consumable
+  by parent `qa-tester` / greppable by `check-work`), and per-flow step
+  sequences that feed `verify_ui_flow` unchanged (discover → verify →
+  scaffold round-trip). Boundaries: read-only crawl — destructive-looking
+  actions (delete / pay / send / publish, … in English + Thai, applied to
+  element text AND to URL paths/queries like `?action=delete`, so icon-only
+  links classify too) are flagged `destructive: true` and never executed;
+  HTTP redirect chains are pre-flighted hop-by-hop with every Location
+  vetted before it is requested (a `302 → /account/delete` is blocked, not
+  followed — Playwright follows redirects inside its network stack, past
+  route handlers), plus a context-wide navigation guard covering in-page
+  (meta refresh / scripted) redirects, iframe embeds, and `window.open`
+  popups; a deny-listed or destructive start URL is refused before any
+  request; form interaction is opt-in (`interact_forms`) and
+  GET-only with dummy data; hard budget caps (`max_pages` / `max_depth` /
+  `max_time_ms`) with small defaults and visible truncation reporting —
+  interior page errors degrade the manifest to `warn`, never a silent pass.
+  Optional `setup_steps` (verify step vocabulary) run once before the crawl
+  for logged-in discovery; a setup failure still emits the report +
+  manifest with status `fail`. Manifest phase defaults to `build`; `phase`
+  hint accepted. Tool count 30 → 31, skill count 8 → 9.
+
 ## [0.15.0] — 2026-08-07
 
 ### Added

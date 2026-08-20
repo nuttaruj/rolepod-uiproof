@@ -29,6 +29,7 @@ import { extractComputedStyleTool } from "./tools/atomic/extract_computed_style.
 import { auditA11yTool } from "./tools/composite/audit_a11y.js";
 import { auditPageBudgetTool } from "./tools/composite/audit_page_budget.js";
 import { auditSeoTool } from "./tools/composite/audit_seo.js";
+import { discoverFlowsTool } from "./tools/composite/discover_flows.js";
 import { extractUiStateTool } from "./tools/composite/extract_ui_state.js";
 import { measureCwvTool } from "./tools/composite/measure_cwv.js";
 import { scaffoldE2eTool } from "./tools/composite/scaffold_e2e.js";
@@ -140,6 +141,8 @@ export function buildServer(
     measureCwvTool,
     auditPageBudgetTool,
     auditSeoTool,
+    // v0.16 black-box discovery
+    discoverFlowsTool,
   ] as const;
 
   for (const t of tools) {
