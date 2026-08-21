@@ -7,6 +7,8 @@ release.
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-08-21
+
 ### Added
 
 - **`maestro` as a 4th `scaffold_e2e` framework — mobile scaffold path**

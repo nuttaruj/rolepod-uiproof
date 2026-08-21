@@ -24,7 +24,7 @@ One MCP server, one tool surface, nine skills you invoke from chat. Web is produ
 | `/check-errors` | `verify_ui_flow` | Thin wrapper with strict `no_console_errors` + `no_failed_requests` baked in. Use as PR-gate or post-merge smoke. |
 | `/audit-a11y` | `audit_a11y` | axe-core audit at WCAG-A / AA / AAA. `scope: "page"` or `scope: { ref }`. Markdown or JSON report. |
 | `/visual-diff` | `visual_diff` | Pixel diff against a named baseline. Auto-seeds on first call. Configurable threshold + pixelmatch sensitivity. `settle` (default on) scrolls + freezes the page so scroll-reveal/lazy content is captured; `selector` scopes the diff to one element; size mismatches degrade gracefully (overlap diff + deltas, not a hard error). |
-| `/scaffold-e2e` | `scaffold_e2e` | Generate a runnable test file from a scenario + optional replay bundle. Three target frameworks. v0.5 codegen handles every step + expect kind. |
+| `/scaffold-e2e` | `scaffold_e2e` | Generate a runnable test file from a scenario + optional replay bundle. Four target frameworks — three web + Maestro YAML flows for mobile (TC-ID carried in filename/header/tags). v0.5 codegen handles every step + expect kind. |
 | `/measure-cwv` | `measure_cwv` | Measure Core Web Vitals (LCP / INP / CLS) on a live page via PerformanceObserver. Verdict per web.dev good / needs-improvement / poor bands. Chromium-only. |
 | `/audit-page-budget` | `audit_page_budget` | HAR-classified byte budget per asset category (js/css/image/font) with third-party tagging. Compares against declared budget, returns graduated pass/warn/fail. |
 | `/audit-seo` | `audit_seo` | On-page SEO check via DOM inspection: title, meta description, h1, lang, viewport, canonical, robots, OG + Twitter Cards, JSON-LD validity, hreflang, favicon. |
@@ -40,7 +40,7 @@ Every skill is **single-backend** (D-024) — it calls the rolepod-uiproof serve
 
 **Combined with rolepod parent**: when the parent's SessionStart hook drops the marker file `<git-root>/.rolepod/parent-active` (single line of content = the protocol version, e.g. `v1`), uiproof writes evidence to `<git-root>/.rolepod/evidence/<ts>-rolepod-uiproof-<skill>/` instead, where parent's `check-work` skill auto-aggregates manifests into the verify report. The marker is re-detected per run, so a marker the parent writes after this server has already started is still honoured; no env-var, no daemon. To force combined mode without a parent session: `mkdir -p .rolepod && echo v1 > .rolepod/parent-active`. No skill changes — same 31 tools, same 9 skills, smarter routing.
 
-**Offline / registry-blocked machines**: the spawn configs fetch `@rolepod/uiproof` via `npx`, which needs npm-registry access. On an air-gapped or registry-blocked host, install once with `npm i -g @rolepod/uiproof@0.16.0` and set the MCP `command` to the global `rolepod-uiproof` binary (drop the `npx` / `-y` args) so no fetch is required at spawn time.
+**Offline / registry-blocked machines**: the spawn configs fetch `@rolepod/uiproof` via `npx`, which needs npm-registry access. On an air-gapped or registry-blocked host, install once with `npm i -g @rolepod/uiproof@0.17.0` and set the MCP `command` to the global `rolepod-uiproof` binary (drop the `npx` / `-y` args) so no fetch is required at spawn time.
 
 | Install | Unlocks |
 |---|---|
@@ -161,7 +161,7 @@ Open Antigravity Settings → Customizations → **Open MCP Config** (or edit `~
   "mcpServers": {
     "rolepod-uiproof": {
       "command": "npx",
-      "args": ["-y", "@rolepod/uiproof@0.16.0"]
+      "args": ["-y", "@rolepod/uiproof@0.17.0"]
     }
   }
 }
@@ -183,7 +183,7 @@ Use this when your tool reads a standard `mcpServers` config (most non-CLI MCP c
   "mcpServers": {
     "rolepod-uiproof": {
       "command": "npx",
-      "args": ["-y", "@rolepod/uiproof@0.16.0"]
+      "args": ["-y", "@rolepod/uiproof@0.17.0"]
     }
   }
 }
