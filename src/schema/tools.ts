@@ -597,12 +597,24 @@ export const e2eFrameworkSchema = z.enum([
   "playwright-test",
   "vitest+playwright",
   "pytest+selenium",
+  "maestro",
 ]);
 
 export const scaffoldE2eShape = {
   framework: e2eFrameworkSchema,
   scenario_nl: z.string().min(1),
-  url: z.string().url(),
+  /**
+   * Entry URL. Required for the web frameworks. For `maestro` pass either
+   * `app_id` (mobile app flow) or `url` (web flow) — enforced in the handler
+   * since a raw shape cannot express cross-field rules. When both are given,
+   * `app_id` wins and the flow targets the mobile app.
+   */
+  url: z.string().url().optional(),
+  /**
+   * Application id for `maestro` flows (e.g. `com.example.app`). Ignored by
+   * the web frameworks.
+   */
+  app_id: z.string().min(1).optional(),
   recorded_bundle: z.string().min(1).optional(),
   /** Override the generated test file name. */
   filename: z.string().min(1).optional(),

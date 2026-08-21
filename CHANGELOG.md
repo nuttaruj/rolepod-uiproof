@@ -7,6 +7,26 @@ release.
 
 ## [Unreleased]
 
+### Added
+
+- **`maestro` as a 4th `scaffold_e2e` framework — mobile scaffold path**
+  (brief/14-maestro-scaffold.md). `framework: "maestro"` emits a Maestro
+  YAML flow (`launchApp` / `tapOn` / `inputText` / `assertVisible` /
+  `extendedWaitUntil` / `scroll`, per Maestro's own conventions) targeting
+  `app_id` (mobile app) or `url` (web flow). TC-ID traceability preserved:
+  a `TC<n>` id and `P1`/`P2` priority in `scenario_nl` land in the filename
+  (`TC2_<slug>.yaml`), the header comment, and Maestro `tags` — greppable
+  by `check-work` exactly like the web frameworks' test names. Replay
+  bundles transcribe where Maestro has an equivalent; web-only kinds
+  (hover, switch_page, evaluate, network expects) degrade to comments, so
+  the flow always stays valid YAML. Hand-off only: the tool never runs
+  `maestro test`, and the Maestro CLI is not needed to scaffold —
+  `setup_notes` carries the install + run pointer. Schema: `url` is now
+  optional at the shape level with cross-field enforcement in the handler
+  (web frameworks still require it; maestro requires `app_id` or `url`);
+  new optional `app_id`; result `language` gains `"yaml"`. Web frameworks'
+  output is unchanged.
+
 ## [0.16.0] — 2026-08-20
 
 ### Added

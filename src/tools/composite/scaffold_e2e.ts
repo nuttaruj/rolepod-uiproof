@@ -22,10 +22,26 @@ type ReplayShape = {
 export const scaffoldE2eTool: ToolModule<typeof scaffoldE2eShape> = {
   name: ToolNames.scaffoldE2e,
   description:
-    "Generate a runnable e2e test file (playwright-test, vitest+playwright, or pytest+selenium) from a scenario description and optional replay bundle from a prior verify_ui_flow run.",
+    "Generate a runnable e2e test file (playwright-test, vitest+playwright, pytest+selenium, or a maestro YAML flow) from a scenario description and optional replay bundle from a prior verify_ui_flow run.",
   inputShape: scaffoldE2eShape,
   build(ctx) {
     return safeHandler(async (args: ScaffoldE2eInput) => {
+      // Cross-field rules a raw zod shape cannot express: web frameworks
+      // need an entry URL; maestro needs an app id (mobile) or URL (web).
+      if (args.framework === "maestro") {
+        if (!args.app_id && !args.url) {
+          throw new RolepodMcpError(
+            "invalid_input",
+            'framework "maestro" requires `app_id` (mobile app flow) or `url` (web flow).',
+          );
+        }
+      } else if (!args.url) {
+        throw new RolepodMcpError(
+          "invalid_input",
+          `framework "${args.framework}" requires \`url\`.`,
+        );
+      }
+
       const startedAt = new Date().toISOString();
       const { runId, runDir, skill } = await ctx.store.startRun(
         "scaffold",
@@ -38,7 +54,7 @@ export const scaffoldE2eTool: ToolModule<typeof scaffoldE2eShape> = {
       const ctxObj = { args, slug, bundle };
 
       let body: string;
-      let language: "typescript" | "python";
+      let language: "typescript" | "python" | "yaml";
       let filename: string;
       let dependencies: string[];
       let setupNotes: string;
@@ -72,6 +88,16 @@ export const scaffoldE2eTool: ToolModule<typeof scaffoldE2eShape> = {
           dependencies = ["pytest", "selenium"];
           setupNotes =
             "Install: `pip install pytest selenium`. Ensure a Chrome driver is on PATH. Run: `pytest`.";
+          break;
+        case "maestro":
+          body = renderMaestro(ctxObj);
+          language = "yaml";
+          filename = userFilename ?? maestroFilename(args.scenario_nl);
+          dependencies = [];
+          setupNotes =
+            "The Maestro CLI is only needed to RUN the flow, not to scaffold it. " +
+            "Install: `curl -fsSL \"https://get.maestro.mobile.dev\" | bash` (see maestro.dev). " +
+            "Run: `maestro test <flow.yaml>` against a connected device/simulator — hand-off only, never auto-run.";
           break;
         default:
           throw new RolepodMcpError(
@@ -204,6 +230,236 @@ function renderPytestSelenium(c: RenderCtx): string {
     `        driver.quit()`,
     ``,
   ].join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// maestro — YAML flow codegen (mobile-first; web via `url` config)
+//
+// TC-ID traceability contract (brief/14-maestro-scaffold.md): the case id
+// (`TC<n>`) and priority (`P1`/`P2`) found in `scenario_nl` are carried into
+// the filename (`TC2_<slug>.yaml`), the header comment, and Maestro `tags`,
+// so check-work can grep them exactly as it does for the web frameworks.
+// ---------------------------------------------------------------------------
+
+/** Uppercased `TC<n>` token found in the scenario, or null. */
+export function extractTcId(s: string): string | null {
+  const m = /\bTC\d+\b/i.exec(s);
+  return m ? m[0].toUpperCase() : null;
+}
+
+/** Uppercased `P1`/`P2` priority token found in the scenario, or null. */
+export function extractPriority(s: string): string | null {
+  const m = /\bP[12]\b/i.exec(s);
+  return m ? m[0].toUpperCase() : null;
+}
+
+export function maestroFilename(scenario: string): string {
+  const tc = extractTcId(scenario);
+  const prio = extractPriority(scenario);
+  let rest = scenario;
+  // Strip the tokens so the slug doesn't repeat them in lowercase.
+  if (tc) rest = rest.replace(new RegExp(`\\b${tc}\\b`, "gi"), " ");
+  if (prio) rest = rest.replace(new RegExp(`\\b${prio}\\b`, "gi"), " ");
+  const slug = slugify(rest);
+  return tc ? `${tc}_${slug}.yaml` : `${slug}.yaml`;
+}
+
+/** Wait budgets for the generated extendedWaitUntil/waitForAnimationToEnd. */
+const MAESTRO_WAIT_TIMEOUT_MS = 10000;
+const MAESTRO_IDLE_FALLBACK_MS = 1000;
+
+/**
+ * Double-quoted YAML scalar. JSON strings are valid YAML flow scalars, so
+ * JSON.stringify gives injection-safe quoting (quotes, newlines, `#`, `-`).
+ * U+2028/U+2029 are escaped by hand: YAML 1.1 parsers (Maestro's JVM side)
+ * treat LS/PS as line breaks, and JSON.stringify leaves them literal.
+ */
+function yamlStr(s: string): string {
+  return JSON.stringify(s).replace(
+    /[\u2028\u2029]/g,
+    (ch) => `\\u${ch.charCodeAt(0).toString(16)}`,
+  );
+}
+
+/** Untrusted text destined for a YAML comment — a newline would end it. */
+function yamlComment(s: string): string {
+  return s.replace(/\s+/g, " ").trim();
+}
+
+function renderMaestro(c: RenderCtx): string {
+  const tc = extractTcId(c.args.scenario_nl);
+  const prio = extractPriority(c.args.scenario_nl);
+  const scenarioLine = yamlComment(c.args.scenario_nl);
+  const idLabel = [tc, prio ? `[${prio}]` : null].filter(Boolean).join(" ");
+
+  const lines: string[] = [
+    idLabel ? `# ${idLabel} — ${scenarioLine}` : `# ${scenarioLine}`,
+    `# Generated by rolepod-uiproof scaffold_e2e (maestro). Hand-off only — run manually:`,
+    `#   maestro test <this file>`,
+  ];
+
+  // Config document: mobile flows target an app id, web flows a URL.
+  // Same source preference as the web renderers: recorded bundle wins.
+  if (c.args.app_id) {
+    lines.push(`appId: ${yamlStr(c.args.app_id)}`);
+  } else {
+    lines.push(`url: ${yamlStr(c.bundle?.open?.url ?? c.args.url ?? "")}`);
+  }
+  const tags = [tc, prio].filter((t): t is string => t !== null);
+  if (tags.length > 0) {
+    lines.push(`tags:`);
+    for (const t of tags) lines.push(`  - ${t}`);
+  }
+  lines.push(`---`);
+  lines.push(`- launchApp`);
+
+  if (c.bundle?.steps?.length) {
+    for (const step of c.bundle.steps) lines.push(maestroStepLine(step));
+  } else {
+    lines.push(`# TODO: implement steps for: ${scenarioLine}`);
+  }
+  if (c.bundle?.expect?.length) {
+    for (const exp of c.bundle.expect) lines.push(maestroExpectLine(exp));
+  } else {
+    lines.push(`# TODO: add assertions (assertVisible / assertNotVisible)`);
+  }
+  lines.push(``);
+  return lines.join("\n");
+}
+
+function maestroStepLine(step: Step): string {
+  switch (step.kind) {
+    case "click":
+      return `- tapOn: ${yamlStr(String(step.query))}`;
+    case "type":
+      return [
+        `- tapOn: ${yamlStr(String(step.query))}`,
+        `- inputText: ${yamlStr(String(step.text))}`,
+      ].join("\n");
+    case "key": {
+      const key = maestroKeyName(String(step.key));
+      return key
+        ? `- pressKey: ${key}`
+        : `# key "${yamlComment(String(step.key))}" has no Maestro pressKey equivalent`;
+    }
+    case "navigate":
+      return `- openLink: ${yamlStr(String(step.url))}`;
+    case "wait_for": {
+      const cond = (step.condition ?? {}) as { kind?: string; text?: string; query?: string; ms?: number };
+      if (cond.kind === "text_visible" || cond.kind === "ref_exists") {
+        const target = cond.kind === "text_visible" ? cond.text : cond.query;
+        return [
+          `- extendedWaitUntil:`,
+          `    visible: ${yamlStr(String(target ?? ""))}`,
+          `    timeout: ${MAESTRO_WAIT_TIMEOUT_MS}`,
+        ].join("\n");
+      }
+      if (cond.kind === "idle") {
+        return [
+          `- waitForAnimationToEnd:`,
+          `    timeout: ${Number(cond.ms) || MAESTRO_IDLE_FALLBACK_MS}`,
+        ].join("\n");
+      }
+      return `# wait_for: ${yamlComment(JSON.stringify(cond))} — Maestro auto-waits; use extendedWaitUntil if needed`;
+    }
+    case "hover":
+      return `# hover ${yamlStr(String(step.query))} — no Maestro equivalent (touch devices have no cursor)`;
+    case "drag":
+      return [
+        `# drag ${yamlStr(String(step.from_query))} → ${yamlStr(String(step.to_query))} — translate to a swipe:`,
+        `# - swipe:`,
+        `#     start: "50%, 70%"`,
+        `#     end: "50%, 30%"`,
+      ].join("\n");
+    case "fill_form": {
+      const fields = Array.isArray(step.fields)
+        ? (step.fields as Array<{ query: string; value: unknown; kind?: string }>)
+        : [];
+      return fields
+        .map((f) => {
+          const label = yamlStr(f.query);
+          if (f.kind === "checkbox" || f.kind === "radio") {
+            return `- tapOn: ${label}`;
+          }
+          if (f.kind === "select") {
+            return [
+              `- tapOn: ${label}`,
+              `- tapOn: ${yamlStr(String(f.value))}`,
+            ].join("\n");
+          }
+          return [
+            `- tapOn: ${label}`,
+            `- inputText: ${yamlStr(String(f.value))}`,
+          ].join("\n");
+        })
+        .join("\n");
+    }
+    case "upload":
+      return [
+        `# upload ${yamlStr(String(step.query))} — push the file to the device gallery first, then pick it:`,
+        `# - addMedia:`,
+        `#     - ${yamlStr(String(step.file_path))}`,
+      ].join("\n");
+    case "dialog":
+      return `# dialog (${yamlComment(String(step.action))}) — tapOn the dialog button's visible label, e.g. \`- tapOn: "OK"\``;
+    case "set_env":
+      return `# set_env — device-level configuration; set it on the emulator/simulator or via maestro --device`;
+    case "switch_page":
+      return `# switch_page — no tab/window model on mobile; split into a separate flow file`;
+    case "evaluate":
+      return `# evaluate — browser JS does not apply on mobile; see Maestro runScript/evalScript for flow-level JS`;
+    case "scroll": {
+      const dir = String(step.direction ?? "down");
+      if (dir === "down") return `- scroll`;
+      // Touch semantics: scrolling content down means the finger swipes up.
+      const swipe: Record<string, string> = { up: "DOWN", left: "RIGHT", right: "LEFT" };
+      return [`- swipe:`, `    direction: ${swipe[dir] ?? "UP"}`].join("\n");
+    }
+    case "settle":
+      return `# settle — web-only convenience; Maestro auto-waits after each command`;
+    default:
+      return `# unsupported step kind: ${yamlComment(String(step.kind))}`;
+  }
+}
+
+function maestroExpectLine(exp: Expect): string {
+  switch (exp.kind) {
+    case "text_visible":
+      return `- assertVisible: ${yamlStr(String(exp.text))}`;
+    case "text_absent":
+      return `- assertNotVisible: ${yamlStr(String(exp.text))}`;
+    case "ref_in_state": {
+      const q = yamlStr(String(exp.query));
+      if (exp.state === "enabled") {
+        return [`- assertVisible:`, `    text: ${q}`, `    enabled: true`].join("\n");
+      }
+      if (exp.state === "focused") {
+        return [`- assertVisible:`, `    text: ${q}`, `    focused: true`].join("\n");
+      }
+      return `- assertVisible: ${q}`;
+    }
+    case "url_matches":
+      return `# url_matches ${yamlStr(String(exp.pattern))} — Maestro has no URL assertion; assert on-screen content instead`;
+    case "no_console_errors":
+      return `# no_console_errors — no console capture in Maestro; check app logs out-of-band`;
+    case "no_failed_requests":
+      return `# no_failed_requests — no network capture in Maestro; verify via backend logs or a proxy`;
+    case "request_made":
+      return `# request_made ${yamlStr(String(exp.url_pattern))} — no network capture in Maestro`;
+    case "response_status":
+      return `# response_status ${yamlStr(String(exp.url_pattern))} == ${Number(exp.status)} — no network capture in Maestro`;
+    default:
+      return `# unsupported expect kind: ${yamlComment(String(exp.kind))}`;
+  }
+}
+
+function maestroKeyName(k: string): string | null {
+  const map: Record<string, string> = {
+    Enter: "Enter",
+    Backspace: "Backspace",
+    Home: "Home",
+  };
+  return map[k] ?? null;
 }
 
 function playwrightStepLine(step: Step): string {
