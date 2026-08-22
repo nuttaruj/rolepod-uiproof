@@ -1,4 +1,9 @@
-name: Publish to npm
+name: Release to npm
+
+# Publishes via npm OIDC trusted publishing — no long-lived token.
+# The trusted publisher on npmjs.com is bound to THIS workflow filename
+# (release-npm.yml); renaming the file breaks the binding. Provenance is
+# generated automatically under trusted publishing.
 
 on:
   push:
@@ -10,14 +15,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
+      id-token: write # OIDC token exchange with registry.npmjs.org
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          registry-url: "https://registry.npmjs.org"
           cache: "npm"
+      # Trusted publishing needs npm >= 11.5.1; node 22 bundles npm 10.
+      - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run typecheck
       - name: Install Playwright Chromium
@@ -37,6 +43,4 @@ jobs:
             exit 1
           fi
         if: github.event_name == 'push'
-      - run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish --access public
