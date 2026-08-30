@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/nuttaruj/rolepod-uiproof/main/docs/assets/rolepod-uiproof-banner.png" alt="Rolepod uiproof — Browser Verification" width="100%" />
+</p>
+
 # rolepod-uiproof
 
 **rolepod-uiproof gives Claude Code, Cursor, Codex CLI, Gemini CLI, and Antigravity (CLI + IDE) a real browser/mobile driver — so the AI can actually click through your UI, audit accessibility, measure Core Web Vitals, check console errors, inspect network requests, diff screenshots, audit on-page SEO, and scaffold e2e tests instead of guessing.**
