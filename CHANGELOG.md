@@ -7,6 +7,8 @@ release.
 
 ## [Unreleased]
 
+## [0.17.1] — 2026-08-31
+
 ### Changed
 
 - **`/visual-diff` descriptions now advertise design-vs-implementation

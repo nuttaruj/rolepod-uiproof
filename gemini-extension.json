@@ -1,11 +1,11 @@
 {
   "name": "rolepod-uiproof",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "description": "Real browser/mobile driver for AI agents — click through UI, audit accessibility, measure Core Web Vitals, check console errors, inspect network, diff screenshots, audit on-page SEO, scaffold e2e tests, and discover flows on a running app. 31 MCP tools + 9 skills.",
   "mcpServers": {
     "rolepod-uiproof": {
       "command": "npx",
-      "args": ["-y", "@rolepod/uiproof@0.17.0"]
+      "args": ["-y", "@rolepod/uiproof@0.17.1"]
     }
   }
 }
