@@ -1,6 +1,6 @@
 ---
 name: visual-diff
-description: Capture a screenshot of the current UI and compare against a stored baseline under ./.rolepod-uiproof/baselines/. First capture for a baseline_id seeds the baseline; subsequent capture diffs it.
+description: Pixel-compare two UI states and report where they differ — implementation vs a design/reference, before vs after a change, or the current UI vs a stored baseline under ./.rolepod-uiproof/baselines/. Use when a build "still doesn't match" its design and you need to locate the differences across the whole page. First capture for a baseline_id seeds the baseline; subsequent captures diff against it.
 ---
 
 # /visual-diff
@@ -10,13 +10,21 @@ MCP server. No fallback (D-024).
 
 ## When to use
 
+- Design-vs-implementation comparison — the build "still doesn't match" the
+  design/reference and you need to locate WHERE the page differs. Seed the
+  baseline from the reference (point the first call at a reference URL, or
+  drop the design export at `./.rolepod-uiproof/baselines/<baseline_id>.png`
+  — export at 1x and match the capture `viewport`, or every run will report
+  `dimension_mismatch`), then diff the implementation against it. Far faster
+  and more precise than hunting with manual scroll-and-screenshot.
 - Detecting visual regressions against a known-good baseline.
 - Verifying a CSS / styling change does not perturb unrelated elements.
 
 ## When NOT to use
 
 - No baseline exists yet AND the user is not OK with this run becoming
-  the baseline (the first call always seeds).
+  the baseline (the first call always seeds) — unless you pre-drop a
+  reference image as the baseline instead.
 - The page has truly dynamic *content* (rotating banners, live timestamps) —
   the diff will be noisy. `settle` (default on) already freezes CSS animations
   and reveals scroll content; for changing content, scope with `selector` or
@@ -51,10 +59,18 @@ MCP server. No fallback (D-024).
 
 ## Process
 
-1. Build `visual_diff` input from the user's intent.
+1. Build `visual_diff` input from the user's intent. For design-vs-implementation
+   work, seed the baseline from the reference first (a reference URL, or place
+   the design export at `./.rolepod-uiproof/baselines/<baseline_id>.png`).
 2. Call the tool.
 3. Report `diff_pct`, `passed`, and the three image paths. If the baseline
    was just seeded, say so explicitly.
+4. Root-cause when the diff fails: the diff localizes WHERE pixels differ,
+   not WHY. Open `diff_image_path`, identify the differing region, then pull
+   the computed styles of the elements in that region (this server's
+   computed-style extraction tool) to explain the difference — sizing,
+   spacing, color, typography. Optionally re-run with `selector` scoped to
+   that region to confirm the fix.
 
 ## Evidence routing
 

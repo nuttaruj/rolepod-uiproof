@@ -7,6 +7,17 @@ release.
 
 ## [Unreleased]
 
+### Changed
+
+- **`/visual-diff` descriptions now advertise design-vs-implementation
+  comparison** (field feedback: an agent session hand-rolled manual
+  scroll-and-screenshot hunting because the skill only described baseline
+  regression). The skill and tool descriptions now name the
+  compare-two-UIs job, document seeding the baseline from a reference URL
+  or a design-export PNG dropped at `baselines/<baseline_id>.png`, and the
+  skill process gains a root-cause step: the diff localizes WHERE pixels
+  differ — follow up with computed-style extraction for WHY.
+
 ## [0.17.0] — 2026-08-21
 
 ### Added
