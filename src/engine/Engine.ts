@@ -35,6 +35,12 @@ export type OpenOptions = {
   headless?: boolean;
   user_agent?: string;
   locale?: string;
+  /**
+   * Absolute path to a Playwright storageState JSON (cookies + localStorage).
+   * Lets a caller inject an already-authenticated session instead of
+   * navigating a login / one-time-link URL every time. Web-only.
+   */
+  storage_state?: string;
   // mobile forward-compat fields — ignored by web engines
   bundle_id?: string;
   device?: string;

@@ -7,6 +7,37 @@ release.
 
 ## [Unreleased]
 
+### Security
+
+- **HAR artifacts no longer leak auth cookies.** `recordHar` runs in
+  Playwright's `full` mode (audit_page_budget needs sizes/timings), which
+  writes every `Cookie` / `Set-Cookie` / `Authorization` header verbatim —
+  a `network.har` from an authenticated run *was* the session. The engine
+  now scrubs those headers and the structured `cookies` arrays on context
+  close (`src/util/harRedact.ts`); sizes and `_transferSize` are untouched
+  so budget classification is unaffected. `audit_page_budget` records a
+  HAR on every run, so it was exposed without any opt-in. Field report from
+  the rolepod-wplab side, whose 3.1.0 release routes wp-admin one-time
+  links into `browser_open` and made this a live path.
+- `verify_ui_flow` (`evidence_paths.credentials_note`), `audit_page_budget`
+  (`har_note`) and `browser_network` (`har_recording`) now state that
+  `trace.zip` is NOT redacted and must be treated as a credential.
+
+### Added
+
+- **`browser_open.storage_state`** — absolute path to a Playwright
+  storageState JSON. Injects an already-authenticated session so a run does
+  not have to navigate a login / one-time-link URL; reusable across runs
+  and after `browser_close`. Web-only.
+
+### Docs
+
+- README: first launch after install/update can take minutes (cold `npx`
+  install, ~270 MB, mostly the optional `webdriverio` backend) and trips the
+  MCP startup timeout, which Claude Code then caches for ~15 minutes.
+  Pre-warm with `npx -y @rolepod/uiproof@<ver> --help`. Also documents the
+  in-repo `npx` name-collision trap and the artifact-credentials rule.
+
 ## [0.17.1] — 2026-08-31
 
 ### Changed

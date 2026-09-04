@@ -22,6 +22,7 @@ import {
   UnsupportedPlatformError,
 } from "../util/errors.js";
 import { log } from "../util/log.js";
+import { redactHarFile } from "../util/harRedact.js";
 import {
   parseAriaSnapshot,
   type RefMeta,
@@ -266,9 +267,13 @@ export class PlaywrightEngine implements Engine {
     if (opts.viewport) contextOptions.viewport = opts.viewport;
     if (opts.user_agent) contextOptions.userAgent = opts.user_agent;
     if (opts.locale) contextOptions.locale = opts.locale;
+    if (opts.storage_state) contextOptions.storageState = opts.storage_state;
 
     // Wire capture lifecycle. Playwright requires recordHar / recordVideo
     // to be set at context creation; trace is start/stop-based.
+    // HAR stays in mode "full" (audit_page_budget needs sizes/timings);
+    // Cookie / Set-Cookie / Authorization are scrubbed on close — see
+    // util/harRedact.ts.
     if (opts.capture?.har) {
       contextOptions.recordHar = { path: opts.capture.har.path };
     }
@@ -378,6 +383,21 @@ export class PlaywrightEngine implements Engine {
     await s.session.context.close().catch((err: unknown) => {
       log.warn("context close failed", { session_id: session.id, err: String(err) });
     });
+    // Playwright flushes network.har on context close. Scrub auth headers
+    // before anyone can read it — an authenticated session's HAR is the
+    // session.
+    if (s.captureOpts?.har) {
+      await redactHarFile(s.captureOpts.har.path)
+        .then((n) => {
+          if (n > 0) log.info("har redacted", { session_id: session.id, scrubbed: n });
+        })
+        .catch((err: unknown) => {
+          log.warn("har redaction failed — treat network.har as a credential", {
+            session_id: session.id,
+            err: String(err),
+          });
+        });
+    }
     await s.session.browser.close().catch((err: unknown) => {
       log.warn("browser close failed", { session_id: session.id, err: String(err) });
     });

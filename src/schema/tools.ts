@@ -82,6 +82,14 @@ export const browserOpenShape = {
   headless: z.boolean().optional(),
   user_agent: z.string().optional(),
   locale: z.string().optional(),
+  /**
+   * Absolute path to a Playwright storageState JSON (cookies + localStorage,
+   * as written by `context.storageState({ path })`). Injects an existing
+   * authenticated session so the run does not have to navigate a login or
+   * one-time-link URL — reusable across runs and restartable after a
+   * `browser_close`. Web-only; ignored on mobile.
+   */
+  storage_state: z.string().min(1).optional(),
 } as const;
 export const browserOpenSchema = z.object(browserOpenShape);
 export type BrowserOpenInput = z.infer<typeof browserOpenSchema>;

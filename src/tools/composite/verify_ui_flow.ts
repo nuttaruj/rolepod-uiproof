@@ -15,6 +15,7 @@ import type {
 } from "../../engine/Engine.js";
 import { ddmin } from "../../replay/minimize.js";
 import { RolepodMcpError } from "../../util/errors.js";
+import { ARTIFACT_CREDENTIALS_NOTE } from "../../util/harRedact.js";
 import { writeManifest, type ManifestArtifact } from "../../util/manifest.js";
 import { ok, safeHandler } from "../result.js";
 import type { ToolContext, ToolModule } from "../types.js";
@@ -140,6 +141,8 @@ type Evidence = {
   har?: string;
   trace?: string;
   video?: string[];
+  /** Present when har or trace was captured — see util/harRedact.ts. */
+  credentials_note?: string;
 };
 
 type RunOutcome = {
@@ -314,6 +317,9 @@ async function runFlow(
     if (captureCfg?.har) evidence.har = captureCfg.har.path;
     if (captureCfg?.trace) {
       evidence.trace = resolvePath(captureCfg.trace.artifactDir, "trace.zip");
+    }
+    if (captureCfg?.har || captureCfg?.trace) {
+      evidence.credentials_note = ARTIFACT_CREDENTIALS_NOTE;
     }
     if (captureCfg?.video) {
       try {

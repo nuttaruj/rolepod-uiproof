@@ -41,3 +41,14 @@ describe("manifest phase hint", () => {
     ).toThrow();
   });
 });
+
+describe("browser_open storage_state", () => {
+  it("accepts an absolute storageState path and leaves it undefined by default", async () => {
+    const { browserOpenSchema } = await import("../../src/schema/tools.js");
+    expect(browserOpenSchema.parse({}).storage_state).toBeUndefined();
+    expect(
+      browserOpenSchema.parse({ storage_state: "/tmp/wp-admin.storage.json" }).storage_state,
+    ).toBe("/tmp/wp-admin.storage.json");
+    expect(() => browserOpenSchema.parse({ storage_state: "" })).toThrow();
+  });
+});

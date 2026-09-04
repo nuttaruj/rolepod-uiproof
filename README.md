@@ -46,6 +46,16 @@ Every skill is **single-backend** (D-024) — it calls the rolepod-uiproof serve
 
 **Offline / registry-blocked machines**: the spawn configs fetch `@rolepod/uiproof` via `npx`, which needs npm-registry access. On an air-gapped or registry-blocked host, install once with `npm i -g @rolepod/uiproof@0.17.1` and set the MCP `command` to the global `rolepod-uiproof` binary (drop the `npx` / `-y` args) so no fetch is required at spawn time.
 
+**First launch after install or update can take minutes and look like a hang.** Every new version is a fresh `npx` cache entry: the cold install pulls the full dependency tree (roughly 280 packages / 270 MB, most of it the optional `webdriverio` mobile backend) and on a slow link exceeds the MCP client's startup timeout. Claude Code then reports `Failed to connect — CONNECTION_CLOSED` and caches that failure for ~15 minutes, so the *next* session fails too even though the install has finished. Warm starts take 2-3 s. To avoid it, pre-warm the cache right after installing or updating, before opening an agent session:
+
+```bash
+npx -y @rolepod/uiproof@0.17.1 --help
+```
+
+or use the global-binary spawn config above, which never fetches at launch. Running the server from inside a checkout of *this* repo is a separate trap: `npx` sees the local `package.json` with the same name and version, skips the registry, and fails with `rolepod-uiproof: command not found` — use the repo's own `.mcp.json` (`node dist/bin/rolepod-uiproof.js`) there instead.
+
+**Artifacts from authenticated sessions are credentials.** A HAR or Playwright trace recorded while logged in contains the session's auth cookies. uiproof redacts `Cookie`, `Set-Cookie` and `Authorization` headers from `network.har` when the session closes; `trace.zip` is not redacted. Tool results that surface these paths carry a `credentials_note` / `har_note` reminder. Do not attach them to issues, PRs, or shared drives. To start a run already authenticated without burning a login or one-time-link URL each time, pass `storage_state` (absolute path to a Playwright storageState JSON) to `browser_open`.
+
 | Install | Unlocks |
 |---|---|
 | uiproof alone | Browser test, a11y audit, visual diff, e2e scaffold, error gate |

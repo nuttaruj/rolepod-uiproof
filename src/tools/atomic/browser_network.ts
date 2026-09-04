@@ -45,7 +45,7 @@ export const browserNetworkTool: ToolModule<typeof browserNetworkShape> = {
         // filesystem paths into untrusted logs; the verify_ui_flow run
         // result surfaces it in `evidence_paths.har`.
         har_recording: args.export_har
-          ? "HAR is written at session close to the path passed via capture.har at open time."
+          ? "HAR is written at session close to the path passed via capture.har at open time. Cookie/Set-Cookie/Authorization headers are redacted on write; a trace.zip from the same run is not."
           : undefined,
       });
     });

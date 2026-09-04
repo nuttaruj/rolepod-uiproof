@@ -15,6 +15,7 @@ import {
   type AuditPageBudgetInput,
 } from "../../schema/tools.js";
 import { RolepodMcpError } from "../../util/errors.js";
+import { ARTIFACT_CREDENTIALS_NOTE } from "../../util/harRedact.js";
 import {
   writeManifest,
   type ManifestArtifact,
@@ -172,6 +173,7 @@ export const auditPageBudgetTool: ToolModule<typeof auditPageBudgetShape> = {
         status,
         report_path: budgetReportPath,
         har_path: harPath,
+        har_note: ARTIFACT_CREDENTIALS_NOTE,
         ...(manifestPath ? { manifest: manifestPath } : {}),
       });
     });
