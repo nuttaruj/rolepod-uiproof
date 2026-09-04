@@ -11,6 +11,8 @@ ref index of its most recent accessibility snapshot.
 browser_open   →  session_id
        │
        ├─ browser_snapshot   (assigns refs e1, e2, …)
+       ├─ browser_find       (query → ranked refs, no tree; also re-issues refs)
+       ├─ browser_wait_for   (ref_exists → returns matched refs)
        │
        ├─ browser_click(ref) │
        ├─ browser_type(...)  │  ← state-changing calls invalidate refs
@@ -23,9 +25,11 @@ browser_open   →  session_id
 ```
 
 Every state-changing call **invalidates** every ref from the prior
-snapshot. The next call that consumes a ref must either be a fresh
-`browser_snapshot` or a composite tool that snapshots internally. Using
-a stale ref returns a structured error:
+snapshot. The next call that consumes a ref must be preceded by a fresh
+`browser_snapshot`, a `browser_find` / `browser_wait_for { ref_exists }`
+(both snapshot internally and hand back only the matching refs — the
+cheap path on large pages), or a composite tool that snapshots
+internally. Using a stale ref returns a structured error:
 
 ```json
 {

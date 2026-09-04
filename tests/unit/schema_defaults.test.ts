@@ -63,3 +63,18 @@ describe("browser_save_state schema", () => {
     expect(() => browserSaveStateSchema.parse({})).toThrow();
   });
 });
+
+describe("browser_find schema", () => {
+  it("requires session_id + query, defaults limit to 10, caps at 50", async () => {
+    const { browserFindSchema } = await import("../../src/schema/tools.js");
+    const parsed = browserFindSchema.parse({ session_id: "s1", query: "Install Now" });
+    expect(parsed.limit).toBe(10);
+    expect(parsed.role).toBeUndefined();
+    expect(
+      browserFindSchema.parse({ session_id: "s1", query: "Install", role: "button", limit: 3 }).role,
+    ).toBe("button");
+    expect(() => browserFindSchema.parse({ session_id: "s1" })).toThrow();
+    expect(() => browserFindSchema.parse({ session_id: "s1", query: "" })).toThrow();
+    expect(() => browserFindSchema.parse({ session_id: "s1", query: "x", limit: 51 })).toThrow();
+  });
+});

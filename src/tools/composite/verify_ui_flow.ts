@@ -1,5 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { resolve as resolvePath } from "node:path";
+import { collectNodesByQuery } from "../../engine/a11y/query.js";
 import { PlaywrightEngine } from "../../engine/PlaywrightEngine.js";
 import {
   ToolNames,
@@ -680,30 +681,6 @@ export function resolveStepRef(tree: A11yNode, query: string): string {
   const candidates = exact.length > 0 ? exact : partial;
   if (candidates.length === 0) throw missingQuery(query);
   throw ambiguousQuery(query, candidates);
-}
-
-function collectNodesByQuery(
-  tree: A11yNode,
-  query: string,
-): { exact: A11yNode[]; partial: A11yNode[] } {
-  const target = query.toLowerCase();
-  const exact: A11yNode[] = [];
-  const partial: A11yNode[] = [];
-  const visit = (node: A11yNode): void => {
-    const name = node.name?.toLowerCase();
-    const value = node.value?.toLowerCase();
-    if (name === target || value === target) {
-      exact.push(node);
-    } else if (
-      (name?.includes(target) ?? false) ||
-      (value?.includes(target) ?? false)
-    ) {
-      partial.push(node);
-    }
-    node.children?.forEach(visit);
-  };
-  visit(tree);
-  return { exact, partial };
 }
 
 function ambiguousQuery(query: string, candidates: A11yNode[]): RolepodMcpError {

@@ -48,6 +48,25 @@ export function resolveHeadless(env: NodeJS.ProcessEnv): boolean {
 }
 
 /**
+ * Headless Chromium announces itself as `HeadlessChrome/<v>`, and edge / WAF
+ * rules key on that token. Observed 2026-09-04 on a Plesk/nginx host: the
+ * authenticated wp-admin GETs returned 200, the first POST (plugin upload)
+ * got a bare 403, and the identical flow with a desktop UA succeeded. So a
+ * default session logs in fine and then fails on its first mutating request
+ * with no hint that the UA caused it. Present the headed UA instead — the
+ * same string minus the marker, so the version always matches the bundled
+ * Chromium and nothing hand-maintained goes stale. Returns null when there
+ * is no marker (headed, firefox, webkit). Explicit `user_agent` still wins:
+ * pass one containing `HeadlessChrome/` to keep the honest marker (e.g. so
+ * analytics bot filters keep excluding audit traffic).
+ */
+export function withoutHeadlessMarker(userAgent: string): string | null {
+  return userAgent.includes("HeadlessChrome/")
+    ? userAgent.replace("HeadlessChrome/", "Chrome/")
+    : null;
+}
+
+/**
  * True when a launch failed because the browser binary isn't downloaded — the
  * signature of a fresh install or a Playwright version bump that changed the
  * required browser build. Triggers a one-time auto-install.
@@ -265,7 +284,15 @@ export class PlaywrightEngine implements Engine {
 
     const contextOptions: Parameters<typeof browser.newContext>[0] = {};
     if (opts.viewport) contextOptions.viewport = opts.viewport;
-    if (opts.user_agent) contextOptions.userAgent = opts.user_agent;
+    if (opts.user_agent) {
+      contextOptions.userAgent = opts.user_agent;
+    } else if (headless && browserName === "chromium") {
+      // Headless Chromium advertises `HeadlessChrome/<v>`; edge rules 403 on
+      // it (see withoutHeadlessMarker). Present the headed UA unless the
+      // caller chose one.
+      const ua = await this.headedChromiumUserAgent(browser);
+      if (ua) contextOptions.userAgent = ua;
+    }
     if (opts.locale) contextOptions.locale = opts.locale;
     if (opts.storage_state) contextOptions.storageState = opts.storage_state;
 
@@ -491,6 +518,28 @@ export class PlaywrightEngine implements Engine {
       this.installBrowser(browserName);
       this.installedThisSession.add(browserName);
       return await launcher.launch({ headless });
+    }
+  }
+
+  /**
+   * Read the UA the launched Chromium would send and strip the headless
+   * marker. One CDP round-trip; on any failure we keep Playwright's default
+   * rather than fail the open.
+   */
+  private async headedChromiumUserAgent(browser: Browser): Promise<string | null> {
+    try {
+      const cdp = await browser.newBrowserCDPSession();
+      try {
+        const { userAgent } = await cdp.send("Browser.getVersion");
+        return withoutHeadlessMarker(userAgent);
+      } finally {
+        await cdp.detach().catch(() => undefined);
+      }
+    } catch (err) {
+      log.warn("could not read the browser user agent — keeping Chromium's default", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
     }
   }
 

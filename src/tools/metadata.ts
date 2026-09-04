@@ -283,6 +283,15 @@ export const toolMetadata: Record<ToolName, ToolMetadata> = {
       openWorldHint: false,
     },
   },
+  [ToolNames.browserFind]: {
+    title: "Find Elements (query → refs)",
+    annotations: {
+      title: "Find Elements",
+      // Snapshots internally and returns refs; no page mutation.
+      readOnlyHint: true,
+      openWorldHint: true,
+    },
+  },
   [ToolNames.extractComputedStyle]: {
     title: "Extract Computed CSS",
     annotations: {

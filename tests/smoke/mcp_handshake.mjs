@@ -63,7 +63,7 @@ const expected = [
   "browser_wait_for",
   "browser_screenshot",
   "browser_navigate",
-  // atomic (12 — v0.5 + v0.19 save_state)
+  // atomic (13 — v0.5 + v0.19 save_state + v0.20 find)
   "browser_hover",
   "browser_drag",
   "browser_fill_form",
@@ -76,6 +76,7 @@ const expected = [
   "browser_pages",
   "browser_switch_page",
   "browser_save_state",
+  "browser_find",
   "extract_computed_style",
   // composite (5)
   "verify_ui_flow",

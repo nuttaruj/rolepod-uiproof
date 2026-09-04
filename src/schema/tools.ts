@@ -113,6 +113,18 @@ export const browserSaveStateShape = {
 export const browserSaveStateSchema = z.object(browserSaveStateShape);
 export type BrowserSaveStateInput = z.infer<typeof browserSaveStateSchema>;
 
+export const browserFindShape = {
+  session_id: z.string().min(1),
+  /** Accessible name / value to match, case-insensitive. Exact matches rank first, then substrings. */
+  query: z.string().min(1),
+  /** Optional ARIA role filter, e.g. "button", "link", "textbox". */
+  role: z.string().min(1).optional(),
+  /** Max matches returned (1-50). `total` in the result still counts every match. */
+  limit: z.number().int().positive().max(50).default(10),
+} as const;
+export const browserFindSchema = z.object(browserFindShape);
+export type BrowserFindInput = z.infer<typeof browserFindSchema>;
+
 export const browserSnapshotShape = {
   session_id: z.string().min(1),
   mode: z.enum(["visible", "full"]).optional(),
@@ -828,6 +840,7 @@ export const ToolNames = {
   browserPages: "browser_pages",
   browserSwitchPage: "browser_switch_page",
   browserSaveState: "browser_save_state",
+  browserFind: "browser_find",
   extractComputedStyle: "extract_computed_style",
   // composite
   verifyUiFlow: "verify_ui_flow",

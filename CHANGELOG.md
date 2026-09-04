@@ -7,6 +7,46 @@ release.
 
 ## [Unreleased]
 
+### Added
+
+- **`browser_find`** (tool 33, atomic 24) — `{ session_id, query, role?,
+  limit? }` → ranked `matches: [{ref, role, name, value, exact}]` plus
+  `total` / `truncated`. Exact accessible-name/value matches rank first,
+  then substrings, document order within each; optional case-insensitive
+  `role` filter; `limit` 1-50 (default 10). Snapshots server-side and
+  re-issues refs, so a returned ref is valid for the next click / type /
+  hover with no `browser_snapshot` in between. Field report from driving
+  wp-admin: three full snapshots (~10k tokens each, the sidebar alone is
+  ~300 nodes) to click three buttons. Works on web and mobile sessions
+  alike (goes through `Engine.snapshot`). Read-only annotation.
+- **`browser_wait_for { kind: "ref_exists" }` returns `matches`.** The
+  wait already located the element; it now hands back the same ranked
+  `{ref, role, name}` list (top 5) and `total` instead of forcing a
+  snapshot to click what was waited for. Other condition kinds are
+  unchanged (`{ matched, waited_ms }`, refs invalidated).
+- The query → node ranking now lives in `engine/a11y/query.ts`, shared
+  with `verify_ui_flow`'s step resolver (behaviour there unchanged).
+
+### Changed
+
+- **Headless Chromium no longer announces `HeadlessChrome/`.** Playwright's
+  headless shell sends `HeadlessChrome/<v>` as the UA, and edge / WAF
+  rules on real hosts key on it — controlled A/B on a Plesk/nginx host,
+  2026-09-04: authenticated wp-admin GETs returned 200, the first POST
+  (`update.php?action=upload-plugin`) got a bare 403, and the identical
+  flow with a desktop Chrome UA succeeded. Anyone following the
+  one-time-login recipe hit an opaque 403 on their first mutating
+  request. `browser_open` now reads the launched browser's own UA via CDP
+  `Browser.getVersion` and strips the marker (`HeadlessChrome/` →
+  `Chrome/`), so the version always matches the bundled Chromium and
+  nothing hand-maintained goes stale. Explicit `user_agent` still wins —
+  pass a `HeadlessChrome/…` string to restore the honest marker (e.g. so
+  analytics bot filters keep excluding audit traffic). Client-Hint brands
+  (`Sec-CH-UA`) are not rewritten. Headed runs, Firefox and WebKit carry
+  no marker and are untouched. If reading the UA fails, the open proceeds
+  with Playwright's default and logs a warning. Asserted at the wire
+  against a local server in `tests/smoke/default_user_agent.test.ts`.
+
 ## [0.19.1] — 2026-09-04
 
 ### Fixed
