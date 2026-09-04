@@ -7,6 +7,8 @@ release.
 
 ## [Unreleased]
 
+## [0.19.1] — 2026-09-04
+
 ### Fixed
 
 - **Cold-start root cause found and fixed: `npm audit`, not package
