@@ -7,6 +7,8 @@ release.
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-09-04
+
 ### Added
 
 - **`browser_save_state`** (tool 32, atomic 23) — persist the active web

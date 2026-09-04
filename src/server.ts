@@ -42,7 +42,7 @@ import { log } from "./util/log.js";
 import { detectRolepodParent } from "./util/rolepodProtocol.js";
 
 export const SERVER_NAME = "rolepod-uiproof";
-export const SERVER_VERSION = "0.18.0";
+export const SERVER_VERSION = "0.19.0";
 
 /**
  * Extension Protocol version this build implements. Compared at server
