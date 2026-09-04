@@ -7,6 +7,8 @@ release.
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-09-04
+
 ### Added
 
 - **`browser_find`** (tool 33, atomic 24) — `{ session_id, query, role?,
