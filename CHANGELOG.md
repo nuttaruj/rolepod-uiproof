@@ -7,6 +7,8 @@ release.
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-09-04
+
 ### Security
 
 - **HAR artifacts no longer leak auth cookies.** `recordHar` runs in
