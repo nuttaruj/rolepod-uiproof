@@ -62,7 +62,7 @@ export function detectRolepodParent(cwd: string = process.cwd()): ParentState {
     // `mkdir -p .rolepod/parent-active`) or no read permission (EACCES).
     // Degrade to standalone instead of crashing the whole server at boot:
     // detectRolepodParent runs inside buildServer before any tool registers,
-    // so an unguarded throw here takes down all 31 tools with a raw fs stack.
+    // so an unguarded throw here takes down all 32 tools with a raw fs stack.
     log.warn("rolepod parent marker unreadable — treating as standalone", {
       file,
       err: String(err),

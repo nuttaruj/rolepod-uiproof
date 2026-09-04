@@ -8,6 +8,7 @@ import {
   isAppiumReachable,
   parseInstalledDrivers,
   resolveAppiumCommand,
+  resolveManagedWebdriverio,
   type AppiumCommand,
 } from "../engine/appiumProvision.js";
 
@@ -123,11 +124,19 @@ async function checkWebdriverIO(): Promise<Check> {
       detail: url ?? "resolved",
     };
   } catch {
+    const managed = resolveManagedWebdriverio();
+    if (managed) {
+      return {
+        name: "webdriverio (mobile client)",
+        status: "ok",
+        detail: `managed install: ${managed}`,
+      };
+    }
     return {
       name: "webdriverio (mobile client)",
       status: "warn",
       detail:
-        "Not installed — web works fine without it. For mobile: npm i webdriverio",
+        "Not installed — auto-installed on the first mobile session (or run: npx @rolepod/uiproof install:mobile). Web is unaffected.",
     };
   }
 }

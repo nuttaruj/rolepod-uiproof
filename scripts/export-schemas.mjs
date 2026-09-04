@@ -36,6 +36,7 @@ const pairs = [
   ["browserEvaluate", lib.browserEvaluateSchema],
   ["browserPages", lib.browserPagesSchema],
   ["browserSwitchPage", lib.browserSwitchPageSchema],
+  ["browserSaveState", lib.browserSaveStateSchema],
   ["extractComputedStyle", lib.extractComputedStyleSchema],
   ["verifyUiFlow", lib.verifyUiFlowSchema],
   ["auditA11y", lib.auditA11ySchema],

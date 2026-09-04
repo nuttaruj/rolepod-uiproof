@@ -1,4 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 
 /**
  * HAR credential redaction.
@@ -74,9 +75,47 @@ export async function redactHarFile(path: string): Promise<number> {
 }
 
 /**
+ * Playwright trace.zip: the only member carrying request/response headers
+ * is `trace.network` — JSONL of `{"type":"resource-snapshot","snapshot":
+ * <HAR entry>}`. Scrub each line with the same rules as the HAR and
+ * rewrite the archive; every other member (screenshots, DOM snapshots,
+ * stacks) is copied through untouched.
+ */
+export async function redactTraceFile(path: string): Promise<number> {
+  const zipped = await readFile(path);
+  const files = unzipSync(new Uint8Array(zipped));
+  const NETWORK = "trace.network";
+  const raw = files[NETWORK];
+  if (!raw) return 0;
+  let n = 0;
+  const lines = strFromU8(raw).split("\n");
+  const out = lines.map((line) => {
+    if (!line.trim()) return line;
+    let obj: unknown;
+    try {
+      obj = JSON.parse(line);
+    } catch {
+      return line;
+    }
+    const snap = (obj as { snapshot?: HarEntry }).snapshot;
+    if (!snap || typeof snap !== "object") return line;
+    const before = n;
+    n += scrubMessage(snap.request);
+    n += scrubMessage(snap.response);
+    return n > before ? JSON.stringify(obj) : line;
+  });
+  if (n === 0) return 0;
+  files[NETWORK] = strToU8(out.join("\n"));
+  await writeFile(path, zipSync(files));
+  return n;
+}
+
+/**
  * One-line notice attached to tool results that surface HAR / trace paths.
- * The HAR is scrubbed; the Playwright trace is not (it is a zip of raw
- * network + DOM snapshots), so the agent must still treat it as a credential.
+ * Headers and cookies are scrubbed in both, but bodies are not: the HAR
+ * embeds response bodies and the trace carries DOM snapshots + screenshots
+ * of whatever was on screen — anything an authenticated page rendered
+ * (admin markup, nonces, personal data) is still in there.
  */
 export const ARTIFACT_CREDENTIALS_NOTE =
-  "network.har has Cookie/Set-Cookie/Authorization headers redacted. trace.zip (if present) is NOT redacted and may contain the session's auth cookies — treat it as a credential; do not attach it to issues, PRs, or shared drives.";
+  "network.har and trace.zip have Cookie/Set-Cookie/Authorization headers and cookies redacted (best-effort — a warning is logged if redaction fails). Response bodies, DOM snapshots and screenshots are NOT redacted: they contain whatever an authenticated page rendered. Share only with people cleared to see those pages.";

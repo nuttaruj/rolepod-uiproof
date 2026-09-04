@@ -7,6 +7,41 @@ release.
 
 ## [Unreleased]
 
+### Added
+
+- **`browser_save_state`** (tool 32, atomic 23) — persist the active web
+  session's cookies + localStorage as a Playwright storageState JSON
+  (default `<run dir>/storage-state.json`, or an absolute `path`). Pair
+  with `browser_open.storage_state` (0.18.0): log in or open a one-time
+  link once, save, reuse across runs and after `browser_close`. Returns
+  counts only, never values; result carries a credential note. Annotated
+  `destructiveHint: true` (writes a credential-bearing file).
+
+### Security
+
+- **`trace.zip` is now redacted too.** The only member carrying headers is
+  `trace.network` (JSONL of HAR-shaped resource snapshots); it gets the
+  same Cookie / Set-Cookie / Authorization / cookies[] scrub as
+  `network.har` after `tracing.stop`, and the archive is rewritten with
+  every other member (screenshots, DOM snapshots, stacks) byte-identical.
+  New runtime dependency `fflate` (zero-dep, ~30 KB used) for the zip
+  round-trip. The credentials note on `verify_ui_flow` /
+  `audit_page_budget` / `browser_network` results now says: headers and
+  cookies scrubbed in both files, bodies / DOM snapshots / screenshots are
+  not — share only with people cleared to see the authenticated pages.
+
+### Changed
+
+- **`webdriverio` dropped from `optionalDependencies`.** Its transitive
+  tree (~280 packages, ~150 MB) dominated the cold `npx` install that was
+  pushing first launch past the MCP startup timeout (measured 318 s on
+  2026-09-04) — and web sessions never load it. Mobile now provisions it on
+  demand into `~/.rolepod-uiproof/webdriverio/` (same policy as Appium and
+  the Playwright browsers), honouring `ROLEPOD_NO_AUTO_INSTALL=1`; a
+  webdriverio the user installed alongside the package is still picked up
+  first. `install:mobile` provisions it up front; `doctor` reports the
+  managed install. `@wdio/types` stays a devDependency for typechecking.
+
 ## [0.18.0] — 2026-09-04
 
 ### Security

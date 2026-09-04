@@ -100,6 +100,19 @@ export const browserCloseShape = {
 export const browserCloseSchema = z.object(browserCloseShape);
 export type BrowserCloseInput = z.infer<typeof browserCloseSchema>;
 
+export const browserSaveStateShape = {
+  session_id: z.string().min(1),
+  /**
+   * Absolute path to write the Playwright storageState JSON to. Omitted →
+   * `<artifact run dir>/storage-state.json`. Feed the file back through
+   * `browser_open.storage_state` to start a later session already
+   * authenticated. The file IS the session — treat it as a credential.
+   */
+  path: z.string().min(1).optional(),
+} as const;
+export const browserSaveStateSchema = z.object(browserSaveStateShape);
+export type BrowserSaveStateInput = z.infer<typeof browserSaveStateSchema>;
+
 export const browserSnapshotShape = {
   session_id: z.string().min(1),
   mode: z.enum(["visible", "full"]).optional(),
@@ -814,6 +827,7 @@ export const ToolNames = {
   browserEvaluate: "browser_evaluate",
   browserPages: "browser_pages",
   browserSwitchPage: "browser_switch_page",
+  browserSaveState: "browser_save_state",
   extractComputedStyle: "extract_computed_style",
   // composite
   verifyUiFlow: "verify_ui_flow",

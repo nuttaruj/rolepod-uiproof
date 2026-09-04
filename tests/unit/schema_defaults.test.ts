@@ -52,3 +52,14 @@ describe("browser_open storage_state", () => {
     expect(() => browserOpenSchema.parse({ storage_state: "" })).toThrow();
   });
 });
+
+describe("browser_save_state schema", () => {
+  it("requires session_id, path optional", async () => {
+    const { browserSaveStateSchema } = await import("../../src/schema/tools.js");
+    expect(browserSaveStateSchema.parse({ session_id: "s1" }).path).toBeUndefined();
+    expect(
+      browserSaveStateSchema.parse({ session_id: "s1", path: "/tmp/state.json" }).path,
+    ).toBe("/tmp/state.json");
+    expect(() => browserSaveStateSchema.parse({})).toThrow();
+  });
+});

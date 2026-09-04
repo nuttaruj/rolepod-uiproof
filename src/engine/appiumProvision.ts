@@ -508,3 +508,98 @@ export function ensureAppiumUp(
   provisionChain = run.catch(() => undefined);
   return run;
 }
+
+// ---------------------------------------------------------------------------
+// webdriverio — managed install (v0.19). Dropped from optionalDependencies
+// because its transitive tree (~280 packages, ~150 MB) dominated the cold
+// `npx` install and pushed first launch past the MCP startup timeout on
+// slow links. Mobile sessions install it on demand into the managed root,
+// next to Appium; web never pays for it.
+// ---------------------------------------------------------------------------
+
+export function managedWdioRoot(): string {
+  return join(homedir(), ".rolepod-uiproof", "webdriverio");
+}
+
+/**
+ * Pick the ESM entry of a package from its package.json — `exports["."]`
+ * (string, or conditional object with `import` / `default`), else `module`,
+ * else `main`. Returns null when nothing usable is declared.
+ */
+export function pickEsmEntry(pkg: {
+  exports?: unknown;
+  module?: unknown;
+  main?: unknown;
+}): string | null {
+  const dot = (() => {
+    const ex = pkg.exports;
+    if (!ex) return undefined;
+    if (typeof ex === "string") return ex;
+    if (typeof ex === "object" && ex !== null) {
+      const rec = ex as Record<string, unknown>;
+      return "." in rec ? rec["."] : rec;
+    }
+    return undefined;
+  })();
+  if (typeof dot === "string") return dot;
+  if (dot && typeof dot === "object") {
+    const rec = dot as Record<string, unknown>;
+    for (const key of ["import", "node", "default"]) {
+      const v = rec[key];
+      if (typeof v === "string") return v;
+      if (v && typeof v === "object") {
+        const inner = (v as Record<string, unknown>)["default"];
+        if (typeof inner === "string") return inner;
+      }
+    }
+  }
+  if (typeof pkg.module === "string") return pkg.module;
+  if (typeof pkg.main === "string") return pkg.main;
+  return null;
+}
+
+/** Absolute path to the managed webdriverio ESM entry, or null if not installed. */
+export function resolveManagedWebdriverio(root = managedWdioRoot()): string | null {
+  const pkgPath = join(root, "node_modules", "webdriverio", "package.json");
+  if (!existsSync(pkgPath)) return null;
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as Record<string, unknown>;
+    const entry = pickEsmEntry(pkg);
+    if (!entry) return null;
+    const abs = resolvePath(dirname(pkgPath), entry);
+    return existsSync(abs) ? abs : null;
+  } catch {
+    return null;
+  }
+}
+
+export function installManagedWebdriverio(root = managedWdioRoot()): string {
+  mkdirSync(root, { recursive: true });
+  log.warn(
+    "webdriverio not found — installing into managed dir (first mobile session only, ~1-3 min)",
+    { dir: root },
+  );
+  const npmExec = osPlatform() === "win32" ? "npm.cmd" : "npm";
+  const res = spawnSync(
+    npmExec,
+    ["install", "webdriverio@^9.27.1", "--prefix", root, "--no-fund", "--no-audit"],
+    { stdio: "inherit", timeout: 600_000, shell: npmExec.endsWith(".cmd") },
+  );
+  if (res.status !== 0) {
+    throw new RolepodMcpError(
+      "engine_error",
+      `Auto-install of webdriverio failed (npm exit ${res.status ?? "signal"}). ` +
+        `Run \`npx @rolepod/uiproof install:mobile\` or \`npm install webdriverio@^9 --prefix ${root}\` manually.`,
+      { dir: root },
+    );
+  }
+  const entry = resolveManagedWebdriverio(root);
+  if (!entry) {
+    throw new RolepodMcpError(
+      "engine_error",
+      "webdriverio install completed but its entry script could not be resolved.",
+      { dir: root },
+    );
+  }
+  return entry;
+}

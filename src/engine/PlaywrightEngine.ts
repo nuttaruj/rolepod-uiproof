@@ -22,7 +22,7 @@ import {
   UnsupportedPlatformError,
 } from "../util/errors.js";
 import { log } from "../util/log.js";
-import { redactHarFile } from "../util/harRedact.js";
+import { redactHarFile, redactTraceFile } from "../util/harRedact.js";
 import {
   parseAriaSnapshot,
   type RefMeta,
@@ -368,8 +368,12 @@ export class PlaywrightEngine implements Engine {
       const tracePath = resolvePath(s.captureOpts.trace.artifactDir, "trace.zip");
       await s.session.context.tracing
         .stop({ path: tracePath })
+        .then(() => redactTraceFile(tracePath))
+        .then((n) => {
+          if (n > 0) log.info("trace redacted", { session_id: session.id, scrubbed: n });
+        })
         .catch((err: unknown) => {
-          log.warn("trace stop failed", {
+          log.warn("trace stop/redaction failed — treat trace.zip as a credential", {
             session_id: session.id,
             err: String(err),
           });
@@ -1140,6 +1144,20 @@ export class PlaywrightEngine implements Engine {
       title_promise: p.title().catch(() => ""),
       active: i === s.activePageIndex,
     }));
+  }
+
+  /**
+   * Write the context's storageState (cookies + localStorage) to `path`.
+   * Returns counts only — never the values — so the tool result can be
+   * logged without leaking the session.
+   */
+  async saveStorageState(
+    sessionId: string,
+    path: string,
+  ): Promise<{ cookies: number; origins: number }> {
+    const s = this.requireSession(sessionId);
+    const state = await s.session.context.storageState({ path });
+    return { cookies: state.cookies.length, origins: state.origins.length };
   }
 
   async switchPage(sessionId: string, index: number): Promise<void> {

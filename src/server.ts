@@ -22,6 +22,7 @@ import { browserScrollTool } from "./tools/atomic/browser_scroll.js";
 import { browserSetEnvTool } from "./tools/atomic/browser_set_env.js";
 import { browserSnapshotTool } from "./tools/atomic/browser_snapshot.js";
 import { browserSwitchPageTool } from "./tools/atomic/browser_switch_page.js";
+import { browserSaveStateTool } from "./tools/atomic/browser_save_state.js";
 import { browserTypeTool } from "./tools/atomic/browser_type.js";
 import { browserUploadFileTool } from "./tools/atomic/browser_upload_file.js";
 import { browserWaitForTool } from "./tools/atomic/browser_wait_for.js";
@@ -130,6 +131,7 @@ export function buildServer(
     browserEvaluateTool,
     browserPagesTool,
     browserSwitchPageTool,
+    browserSaveStateTool,
     extractComputedStyleTool,
     // composite
     verifyUiFlowTool,

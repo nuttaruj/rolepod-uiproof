@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import {
   RolepodMcpError,
   UnknownRefError,
@@ -14,9 +15,11 @@ import { parseXcuiTestTree, type IosRefMeta } from "./a11y/xcuitest.js";
 import {
   autoAppiumDisabled,
   ensureAppiumUp,
+  installManagedWebdriverio,
   isAppiumConnectionError,
   isLoopbackHost,
   preflightMobileHost,
+  resolveManagedWebdriverio,
 } from "./appiumProvision.js";
 import type {
   A11ySnapshot,
@@ -373,17 +376,38 @@ export class AppiumEngine implements Engine {
 
   private async loadWdio(): Promise<WdioRemote> {
     if (this.wdioCache) return this.wdioCache;
+    type WdioModule = { remote: WdioRemote };
+    // 1. A webdriverio the user installed alongside us (pre-0.19 layout, or
+    //    an explicit `npm i webdriverio`). Avoid TypeScript pulling the
+    //    module into static types.
     try {
-      // Avoid TypeScript pulling the (optional) module into static types.
-      const mod = (await import(/* @vite-ignore */ "webdriverio")) as unknown as {
-        remote: WdioRemote;
-      };
+      const mod = (await import(/* @vite-ignore */ "webdriverio")) as unknown as WdioModule;
       this.wdioCache = mod.remote;
       return mod.remote;
     } catch {
+      /* fall through to the managed install */
+    }
+    // 2. Managed install under ~/.rolepod-uiproof/webdriverio — provisioned
+    //    on demand, same policy as Appium and the Playwright browsers.
+    let entry = resolveManagedWebdriverio();
+    if (!entry) {
+      if (process.env.ROLEPOD_NO_AUTO_INSTALL === "1") {
+        throw new RolepodMcpError(
+          "engine_error",
+          "Mobile support needs webdriverio and ROLEPOD_NO_AUTO_INSTALL=1 disabled the managed install. Run `npx @rolepod/uiproof install:mobile`.",
+        );
+      }
+      entry = installManagedWebdriverio();
+    }
+    try {
+      const mod = (await import(/* @vite-ignore */ pathToFileURL(entry).href)) as WdioModule;
+      this.wdioCache = mod.remote;
+      return mod.remote;
+    } catch (err) {
       throw new RolepodMcpError(
         "engine_error",
         "Mobile support needs webdriverio (and a running Appium server). Run `npx @rolepod/uiproof install:mobile` for the setup checklist.",
+        { entry, cause: err instanceof Error ? err.message : String(err) },
       );
     }
   }

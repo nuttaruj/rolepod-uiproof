@@ -272,6 +272,17 @@ export const toolMetadata: Record<ToolName, ToolMetadata> = {
       openWorldHint: false,
     },
   },
+  [ToolNames.browserSaveState]: {
+    title: "Save Session State",
+    annotations: {
+      title: "Save Session State",
+      // Writes a credential-bearing file to disk (overwrites if present).
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
   [ToolNames.extractComputedStyle]: {
     title: "Extract Computed CSS",
     annotations: {

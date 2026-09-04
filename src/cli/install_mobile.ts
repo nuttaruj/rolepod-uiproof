@@ -2,9 +2,11 @@ import { platform as osPlatform } from "node:os";
 import {
   ensureDriverInstalled,
   installManagedAppium,
+  installManagedWebdriverio,
   isAppiumReachable,
   managedAppiumRoot,
   resolveAppiumCommand,
+  resolveManagedWebdriverio,
 } from "../engine/appiumProvision.js";
 
 /**
@@ -25,6 +27,21 @@ export async function runInstallMobile(args: string[] = []): Promise<number> {
   const out = (l: string) => process.stdout.write(l + "\n");
   const os = osPlatform();
   out("rolepod-uiproof install:mobile — provisioning the mobile stack\n");
+
+  // 0. webdriverio client — not an npm dependency since 0.19 (its tree
+  //    dominated the cold install); lives in the managed dir next to Appium.
+  if (resolveManagedWebdriverio()) {
+    out("  ✓ webdriverio found (managed)");
+  } else {
+    out("  … webdriverio not found — installing into the managed dir (one-time, ~1-3 min)");
+    try {
+      installManagedWebdriverio();
+      out("  ✓ webdriverio installed");
+    } catch (err) {
+      out(`  ✗ webdriverio install failed: ${err instanceof Error ? err.message : String(err)}`);
+      return 1;
+    }
+  }
 
   // 1. Appium server package
   let cmd = resolveAppiumCommand();

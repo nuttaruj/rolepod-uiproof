@@ -11,7 +11,7 @@
     {
       "name": "rolepod-uiproof",
       "source": ".",
-      "description": "31 MCP tools + 9 skills. Web (Playwright) production-ready; mobile (iOS/Android via Appium) scaffolded.",
+      "description": "32 MCP tools + 9 skills. Web (Playwright) production-ready; mobile (iOS/Android via Appium) scaffolded.",
       "version": "0.18.0",
       "author": {
         "name": "nuttaruj"
