@@ -7,6 +7,23 @@ release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cold-start root cause found and fixed: `npm audit`, not package
+  count.** A fresh `npx -y @rolepod/uiproof@<ver>` install spends its
+  time in `POST registry.npmjs.org/-/npm/v1/security/advisories/bulk` —
+  measured 192 s in one run and 190-320 s across five cold starts on
+  2026-09-04 — while downloading and extracting the whole tree takes 6-9 s.
+  That is what pushed first launch past the MCP client's startup timeout
+  and produced `CONNECTION_CLOSED` + the 15-minute cached failure
+  (0.19.0's dependency diet helped size, not time). Every shipped spawn
+  config (`.claude-plugin/plugin.json`, `plugins/rolepod-uiproof/`,
+  `.cursor/mcp.json`, `gemini-extension.json`, README snippets) now sets
+  `npm_config_audit=false` and `npm_config_fund=false` in the server
+  `env` — cold start drops to ~6-9 s. The flags cannot go in the npx args
+  (npx treats leading flags as a usage error), hence env. Guarded by
+  `spawn_version_pin.test.ts`.
+
 ## [0.19.0] — 2026-09-04
 
 ### Added

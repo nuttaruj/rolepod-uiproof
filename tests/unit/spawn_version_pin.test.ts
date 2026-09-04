@@ -42,4 +42,19 @@ describe("spawn config version pin (distribution lockstep)", () => {
     // stale build).
     expect(raw).not.toContain(`"-y", "@rolepod/uiproof"`);
   });
+
+  // Cold-start guard (0.19.1). A fresh `npx` install runs `npm audit`, and
+  // the registry's bulk-advisory endpoint was measured at 190-300 s — past
+  // every MCP client's startup timeout, so the first launch after each
+  // version bump "failed to connect". With audit off the same cold install
+  // takes ~6-9 s. `--no-audit` cannot ride in the npx args (npx treats
+  // leading flags as its own usage error), so it must be the env.
+  it.each(SPAWN_CONFIGS)("%s disables npm audit/fund for the npx spawn", (rel) => {
+    const json = JSON.parse(readFileSync(resolve(repoRoot, rel), "utf8")) as {
+      mcpServers: Record<string, { env?: Record<string, string> }>;
+    };
+    const env = json.mcpServers["rolepod-uiproof"]?.env ?? {};
+    expect(env.npm_config_audit).toBe("false");
+    expect(env.npm_config_fund).toBe("false");
+  });
 });

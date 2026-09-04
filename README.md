@@ -46,10 +46,10 @@ Every skill is **single-backend** (D-024) — it calls the rolepod-uiproof serve
 
 **Offline / registry-blocked machines**: the spawn configs fetch `@rolepod/uiproof` via `npx`, which needs npm-registry access. On an air-gapped or registry-blocked host, install once with `npm i -g @rolepod/uiproof@0.19.0` and set the MCP `command` to the global `rolepod-uiproof` binary (drop the `npx` / `-y` args) so no fetch is required at spawn time.
 
-**First launch after install or update can take minutes and look like a hang.** Every new version is a fresh `npx` cache entry: the cold install pulls the full dependency tree and on a slow link exceeds the MCP client's startup timeout. Claude Code then reports `Failed to connect — CONNECTION_CLOSED` and caches that failure for ~15 minutes, so the *next* session fails too even though the install has finished. Warm starts take 2-3 s. To avoid it, pre-warm the cache right after installing or updating, before opening an agent session:
+**First launch after install or update: the `npm audit` trap.** Every new version is a fresh `npx` cache entry, and a cold `npx` install runs `npm audit` against the registry's bulk-advisory endpoint — measured at 190-320 s on 2026-09-04, while the actual download + extract of the tree takes 6-9 s. That blows every MCP client's startup timeout; Claude Code reports `Failed to connect — CONNECTION_CLOSED` and caches the failure for ~15 minutes, so the *next* session fails too even though the install finished in the background. Since 0.19.1 every shipped spawn config sets `npm_config_audit=false` and `npm_config_fund=false` in the server's `env`, which brings the cold start down to seconds (the flags cannot be passed in the `npx` args — npx treats leading flags as its own usage error). If you hand-write a spawn config, copy that `env` block from the snippets below. To pre-warm anyway, before opening an agent session:
 
 ```bash
-npx -y @rolepod/uiproof@0.19.0 --help
+npm_config_audit=false npx -y @rolepod/uiproof@0.19.0 --help
 ```
 
 or use the global-binary spawn config above, which never fetches at launch. Running the server from inside a checkout of *this* repo is a separate trap: `npx` sees the local `package.json` with the same name and version, skips the registry, and fails with `rolepod-uiproof: command not found` — use the repo's own `.mcp.json` (`node dist/bin/rolepod-uiproof.js`) there instead.
@@ -175,7 +175,8 @@ Open Antigravity Settings → Customizations → **Open MCP Config** (or edit `~
   "mcpServers": {
     "rolepod-uiproof": {
       "command": "npx",
-      "args": ["-y", "@rolepod/uiproof@0.19.0"]
+      "args": ["-y", "@rolepod/uiproof@0.19.0"],
+      "env": { "npm_config_audit": "false", "npm_config_fund": "false" }
     }
   }
 }
@@ -197,7 +198,8 @@ Use this when your tool reads a standard `mcpServers` config (most non-CLI MCP c
   "mcpServers": {
     "rolepod-uiproof": {
       "command": "npx",
-      "args": ["-y", "@rolepod/uiproof@0.19.0"]
+      "args": ["-y", "@rolepod/uiproof@0.19.0"],
+      "env": { "npm_config_audit": "false", "npm_config_fund": "false" }
     }
   }
 }
