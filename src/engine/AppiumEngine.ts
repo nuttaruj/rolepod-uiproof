@@ -381,7 +381,10 @@ export class AppiumEngine implements Engine {
     //    an explicit `npm i webdriverio`). Avoid TypeScript pulling the
     //    module into static types.
     try {
-      const mod = (await import(/* @vite-ignore */ "webdriverio")) as unknown as WdioModule;
+      // Non-literal specifier: webdriverio is not a dependency any more, so
+      // a literal would fail typecheck (TS2307) on a clean install.
+      const bareSpecifier = "webdriverio";
+      const mod = (await import(/* @vite-ignore */ bareSpecifier)) as unknown as WdioModule;
       this.wdioCache = mod.remote;
       return mod.remote;
     } catch {
