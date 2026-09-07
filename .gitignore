@@ -38,3 +38,9 @@ brief/
 
 # claude harness local state
 .claude/
+
+# codegraph index (local)
+.codegraph/
+
+# internal working docs (specs / plans / hand-offs) — local only
+docs/rolepod/
