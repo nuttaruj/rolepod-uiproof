@@ -7,6 +7,8 @@ release.
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-09-22
+
 ### Added
 
 - **opencode support** — `skills/index.json` is an opencode HTTP skill

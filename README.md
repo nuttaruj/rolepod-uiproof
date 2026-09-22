@@ -44,12 +44,12 @@ Every skill is **single-backend** (D-024) — it calls the rolepod-uiproof serve
 
 **Combined with rolepod parent**: when the parent's SessionStart hook drops the marker file `<git-root>/.rolepod/parent-active` (single line of content = the protocol version, e.g. `v1`), uiproof writes evidence to `<git-root>/.rolepod/evidence/<ts>-rolepod-uiproof-<skill>/` instead, where parent's `check-work` skill auto-aggregates manifests into the verify report. The marker is re-detected per run, so a marker the parent writes after this server has already started is still honoured; no env-var, no daemon. To force combined mode without a parent session: `mkdir -p .rolepod && echo v1 > .rolepod/parent-active`. No skill changes — same 33 tools, same 9 skills, smarter routing.
 
-**Offline / registry-blocked machines**: the spawn configs fetch `@rolepod/uiproof` via `npx`, which needs npm-registry access. On an air-gapped or registry-blocked host, install once with `npm i -g @rolepod/uiproof@0.20.0` and set the MCP `command` to the global `rolepod-uiproof` binary (drop the `npx` / `-y` args) so no fetch is required at spawn time.
+**Offline / registry-blocked machines**: the spawn configs fetch `@rolepod/uiproof` via `npx`, which needs npm-registry access. On an air-gapped or registry-blocked host, install once with `npm i -g @rolepod/uiproof@0.21.0` and set the MCP `command` to the global `rolepod-uiproof` binary (drop the `npx` / `-y` args) so no fetch is required at spawn time.
 
 **First launch after install or update: the `npm audit` trap.** Every new version is a fresh `npx` cache entry, and a cold `npx` install runs `npm audit` against the registry's bulk-advisory endpoint — measured at 190-320 s on 2026-09-04, while the actual download + extract of the tree takes 6-9 s. That blows every MCP client's startup timeout; Claude Code reports `Failed to connect — CONNECTION_CLOSED` and caches the failure for ~15 minutes, so the *next* session fails too even though the install finished in the background. Since 0.20.0 every shipped spawn config sets `npm_config_audit=false` and `npm_config_fund=false` in the server's `env`, which brings the cold start down to seconds (the flags cannot be passed in the `npx` args — npx treats leading flags as its own usage error). If you hand-write a spawn config, copy that `env` block from the snippets below. To pre-warm anyway, before opening an agent session:
 
 ```bash
-npm_config_audit=false npx -y @rolepod/uiproof@0.20.0 --help
+npm_config_audit=false npx -y @rolepod/uiproof@0.21.0 --help
 ```
 
 or use the global-binary spawn config above, which never fetches at launch. Running the server from inside a checkout of *this* repo is a separate trap: `npx` sees the local `package.json` with the same name and version, skips the registry, and fails with `rolepod-uiproof: command not found` — use the repo's own `.mcp.json` (`node dist/bin/rolepod-uiproof.js`) there instead.
@@ -179,7 +179,7 @@ Open Antigravity Settings → Customizations → **Open MCP Config** (or edit `~
   "mcpServers": {
     "rolepod-uiproof": {
       "command": "npx",
-      "args": ["-y", "@rolepod/uiproof@0.20.0"],
+      "args": ["-y", "@rolepod/uiproof@0.21.0"],
       "env": { "npm_config_audit": "false", "npm_config_fund": "false" }
     }
   }
@@ -202,7 +202,7 @@ opencode reads MCP servers from `opencode.json` (project root, or `~/.config/ope
 ```bash
 opencode mcp add rolepod-uiproof \
   --env npm_config_audit=false --env npm_config_fund=false \
-  -- npx -y @rolepod/uiproof@0.20.0
+  -- npx -y @rolepod/uiproof@0.21.0
 ```
 
 **Step 2 — Skills + direct tool names.** Open that file and add the skill catalog URL plus `"codemode": false` on the server (`opencode mcp add` has no flag for it). The finished config:
@@ -213,7 +213,7 @@ opencode mcp add rolepod-uiproof \
     "servers": {
       "rolepod-uiproof": {
         "type": "local",
-        "command": ["npx", "-y", "@rolepod/uiproof@0.20.0"],
+        "command": ["npx", "-y", "@rolepod/uiproof@0.21.0"],
         "environment": { "npm_config_audit": "false", "npm_config_fund": "false" },
         "codemode": false
       }
@@ -239,7 +239,7 @@ Use this when your tool reads a standard `mcpServers` config (most non-CLI MCP c
   "mcpServers": {
     "rolepod-uiproof": {
       "command": "npx",
-      "args": ["-y", "@rolepod/uiproof@0.20.0"],
+      "args": ["-y", "@rolepod/uiproof@0.21.0"],
       "env": { "npm_config_audit": "false", "npm_config_fund": "false" }
     }
   }
