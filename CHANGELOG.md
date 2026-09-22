@@ -7,6 +7,8 @@ release.
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-09-22
+
 ### Added
 
 - **One-line opencode install** — `scripts/install-opencode.sh`

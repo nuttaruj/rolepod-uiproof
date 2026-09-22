@@ -23,7 +23,7 @@ set -euo pipefail
 REPO="nuttaruj/rolepod-uiproof"
 RAW="https://raw.githubusercontent.com/$REPO/main/scripts/install-opencode.sh"
 # Pinned like every other spawn config; tests/unit/version_lockstep.test.ts keeps it on package.json.
-PACKAGE_SPEC="@rolepod/uiproof@0.21.0"
+PACKAGE_SPEC="@rolepod/uiproof@0.22.0"
 SERVER="rolepod-uiproof"
 
 SCOPE=global
