@@ -1,0 +1,67 @@
+{
+  "skills": [
+    {
+      "name": "audit-a11y",
+      "version": "0.20.0",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "audit-page-budget",
+      "version": "0.20.0",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "audit-seo",
+      "version": "0.20.0",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "check-errors",
+      "version": "0.20.0",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "discover-flows",
+      "version": "0.20.0",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "measure-cwv",
+      "version": "0.20.0",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "scaffold-e2e",
+      "version": "0.20.0",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "verify-ui",
+      "version": "0.20.0",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "visual-diff",
+      "version": "0.20.0",
+      "files": [
+        "SKILL.md"
+      ]
+    }
+  ]
+}

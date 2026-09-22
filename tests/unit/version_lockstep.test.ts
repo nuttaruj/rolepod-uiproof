@@ -20,6 +20,7 @@ const MANIFESTS = [
   ".cursor-plugin/plugin.json",
   ".cursor-plugin/marketplace.json",
   "gemini-extension.json",
+  "skills/index.json",
   "plugins/rolepod-uiproof/.claude-plugin/plugin.json",
   "plugins/rolepod-uiproof/.codex-plugin/plugin.json",
 ];

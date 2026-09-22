@@ -4,7 +4,7 @@
 
 # rolepod-uiproof
 
-**rolepod-uiproof gives Claude Code, Cursor, Codex CLI, Gemini CLI, and Antigravity (CLI + IDE) a real browser/mobile driver — so the AI can actually click through your UI, audit accessibility, measure Core Web Vitals, check console errors, inspect network requests, diff screenshots, audit on-page SEO, and scaffold e2e tests instead of guessing.**
+**rolepod-uiproof gives Claude Code, Cursor, Codex CLI, Gemini CLI, Antigravity (CLI + IDE), and opencode a real browser/mobile driver — so the AI can actually click through your UI, audit accessibility, measure Core Web Vitals, check console errors, inspect network requests, diff screenshots, audit on-page SEO, and scaffold e2e tests instead of guessing.**
 
 One MCP server, one tool surface, nine skills you invoke from chat. Web is production-ready via Playwright; iOS and Android use Appium (same client as alumnium — needs a local Appium daemon + simulator/emulator, or a real device). No internal LLM — your Lead agent drives every action.
 
@@ -191,7 +191,44 @@ Restart Antigravity. Verify the MCP server is connected via Settings → Customi
 **Notes:**
 - Antigravity's `mcp_config.json` is shared across all Agy tools (CLI + IDE) — one config, both surfaces.
 - Skills are auto-discovered from `~/.gemini/skills/` — no manifest needed.
-- The 32 MCP tools surface in chat the same way as in Claude Code / Cursor / Codex.
+- The 33 MCP tools surface in chat the same way as in Claude Code / Cursor / Codex.
+
+### opencode
+
+opencode reads MCP servers from `opencode.json` (project root, or `~/.config/opencode/opencode.json` for every project) and loads skills from an HTTP catalog, so one config block wires both — no clone, nothing copied into your project.
+
+**Step 1 — MCP server.** Writes the project `opencode.json`; add `--global` for the user-wide file:
+
+```bash
+opencode mcp add rolepod-uiproof \
+  --env npm_config_audit=false --env npm_config_fund=false \
+  -- npx -y @rolepod/uiproof@0.20.0
+```
+
+**Step 2 — Skills + direct tool names.** Open that file and add the skill catalog URL plus `"codemode": false` on the server (`opencode mcp add` has no flag for it). The finished config:
+
+```jsonc
+{
+  "mcp": {
+    "servers": {
+      "rolepod-uiproof": {
+        "type": "local",
+        "command": ["npx", "-y", "@rolepod/uiproof@0.20.0"],
+        "environment": { "npm_config_audit": "false", "npm_config_fund": "false" },
+        "codemode": false
+      }
+    }
+  },
+  "skills": ["https://raw.githubusercontent.com/nuttaruj/rolepod-uiproof/main/skills/"]
+}
+```
+
+Start an opencode session in that project, send one prompt, then check `opencode mcp list` — `rolepod-uiproof` should show as connected (the command reports the background service's loaded instance, so before that first session it prints `No MCP servers configured`). Tools surface as `rolepod-uiproof_<tool>`, e.g. `rolepod-uiproof_verify_ui_flow`. The catalog is [`skills/index.json`](skills/index.json) in this repo: opencode fetches every `skills/<name>/SKILL.md` it lists and caches them by `version`, so a new release refreshes the skills without touching your config. Invoke them as `/verify-ui` etc., or let the model load one through its `skill` tool.
+
+**Notes:**
+- Verified on opencode 2.0.12 (v2 config shape: `mcp.servers.<name>`, `environment`, `disabled`). A v1-style entry (`mcp.<name>` with `enabled`) is still normalized by v2.
+- **Why `codemode: false`:** opencode v2 wraps MCP servers in Code Mode by default — the model gets a generic `execute`/`query` pair and none of the 33 tools by name, so the skills' by-name calls (`verify_ui_flow`, `browser_open`, …) never resolve. With Code Mode off the tools are exposed directly, the same as in every other CLI (measured 2026-09-22: with it on, a connected server still listed no `rolepod-uiproof_*` tool).
+- Prefer local files? opencode also discovers `.opencode/skills/`, `.claude/skills/` and `.agents/skills/` in the project (and their `~/` equivalents) — `cp -r skills/* ~/.config/opencode/skills/` works, but stops tracking releases.
 
 ### Direct npm (any MCP-aware tool)
 
@@ -209,11 +246,11 @@ Use this when your tool reads a standard `mcpServers` config (most non-CLI MCP c
 }
 ```
 
-32 MCP tools (22 `browser_*` atomics + `extract_computed_style` + 9 composites including `verify_ui_flow`, `audit_a11y`, `visual_diff`, `scaffold_e2e`, `extract_ui_state`, `measure_cwv`, `audit_page_budget`, `audit_seo`, `discover_flows`) will appear in your client. Skills are not surfaced via this path — call the tools by name.
+33 MCP tools (23 `browser_*` atomics + `extract_computed_style` + 9 composites including `verify_ui_flow`, `audit_a11y`, `visual_diff`, `scaffold_e2e`, `extract_ui_state`, `measure_cwv`, `audit_page_budget`, `audit_seo`, `discover_flows`) will appear in your client. Skills are not surfaced via this path — call the tools by name.
 
 ## Quick start
 
-After install, in your Claude Code / Cursor / Codex session:
+After install, in your Claude Code / Cursor / Codex / opencode session:
 
 ```
 /verify-ui https://example.com
@@ -305,4 +342,4 @@ The two are **independent**: install rolepod-uiproof standalone and get a comple
 
 ---
 
-MIT licensed — see [LICENSE](LICENSE) and [THIRD_PARTY.md](THIRD_PARTY.md). Mobile AT normalizers are alumnium-inspired ([UPSTREAM_TRACKING.md](UPSTREAM_TRACKING.md)). Feedback + runtime reports for Cursor / Codex / Gemini install paths especially welcome via [issues](https://github.com/nuttaruj/rolepod-uiproof/issues).
+MIT licensed — see [LICENSE](LICENSE) and [THIRD_PARTY.md](THIRD_PARTY.md). Mobile AT normalizers are alumnium-inspired ([UPSTREAM_TRACKING.md](UPSTREAM_TRACKING.md)). Feedback + runtime reports for Cursor / Codex / Gemini / opencode install paths especially welcome via [issues](https://github.com/nuttaruj/rolepod-uiproof/issues).

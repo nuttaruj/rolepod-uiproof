@@ -7,6 +7,27 @@ release.
 
 ## [Unreleased]
 
+### Added
+
+- **opencode support** — `skills/index.json` is an opencode HTTP skill
+  catalog (v2 `skills` config: point it at
+  `https://raw.githubusercontent.com/nuttaruj/rolepod-uiproof/main/skills/`
+  and all 9 skills register, cached by `version`, refreshed per release).
+  README gains an opencode install section: `opencode mcp add
+  rolepod-uiproof --env npm_config_audit=false --env npm_config_fund=false
+  -- npx -y @rolepod/uiproof@<version>` writes the v2 `mcp.servers` entry
+  (shape verified against opencode 2.0.12), plus the one-line `skills`
+  catalog and `"codemode": false` — opencode's default Code Mode hides
+  MCP tools behind a generic `execute`/`query` pair, so the skills'
+  by-name calls never resolve; with it off all 33 surface as
+  `rolepod-uiproof_<tool>` (live-verified: server connected, catalog
+  served all 9 `SKILL.md` files). New `opencode_skill_catalog` unit
+  test keeps the catalog in lockstep with the `skills/` tree and
+  package.json; `skills/index.json` joins the `version_lockstep`
+  manifest list. Packaging + docs only — no
+  server change, no new files shipped to the other CLIs (the catalog rides
+  in the npm tarball via `skills/` but is inert there).
+
 ## [0.20.0] — 2026-09-04
 
 ### Added
