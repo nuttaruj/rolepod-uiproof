@@ -37,6 +37,7 @@ const PIN_FILES = [
   "plugins/rolepod-uiproof/.mcp.json",
   "plugins/rolepod-uiproof/.claude-plugin/plugin.json",
   "README.md",
+  "scripts/install-opencode.sh",
 ];
 
 describe("version lockstep", () => {

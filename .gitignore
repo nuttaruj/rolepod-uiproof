@@ -44,3 +44,6 @@ brief/
 
 # internal working docs (specs / plans / hand-offs) — local only
 docs/rolepod/
+
+# opencode per-project config written by scripts/install-opencode.sh --project (machine-specific path)
+.opencode/

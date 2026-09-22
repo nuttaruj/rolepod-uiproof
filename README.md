@@ -195,20 +195,29 @@ Restart Antigravity. Verify the MCP server is connected via Settings → Customi
 
 ### opencode
 
-opencode reads MCP servers from `opencode.json` (project root, or `~/.config/opencode/opencode.json` for every project) and loads skills from an HTTP catalog, so one config block wires both — no clone, nothing copied into your project.
-
-**Step 1 — MCP server.** Writes the project `opencode.json`; add `--global` for the user-wide file:
+One command wires both the MCP server and the skills: it merges a `rolepod-uiproof` server entry and this repo's skill catalog into opencode's config and touches nothing else. Install and update are the same command:
 
 ```bash
-opencode mcp add rolepod-uiproof \
-  --env npm_config_audit=false --env npm_config_fund=false \
-  -- npx -y @rolepod/uiproof@0.21.0
+# Global (every project) → ~/.config/opencode/opencode.json
+curl -fsSL https://raw.githubusercontent.com/nuttaruj/rolepod-uiproof/main/scripts/install-opencode.sh | bash
+
+# This project only → ./.opencode/opencode.json
+curl -fsSL https://raw.githubusercontent.com/nuttaruj/rolepod-uiproof/main/scripts/install-opencode.sh | bash -s -- --project
+
+# Remove (only the rolepod-uiproof entry and its catalog URL are touched)
+curl -fsSL https://raw.githubusercontent.com/nuttaruj/rolepod-uiproof/main/scripts/install-opencode.sh | bash -s -- --uninstall
+
+# Pin a release tag instead of main (the variable goes on bash, not on curl)
+curl -fsSL https://raw.githubusercontent.com/nuttaruj/rolepod-uiproof/main/scripts/install-opencode.sh | ROLEPOD_UIPROOF_REF=vX.Y.Z bash
 ```
 
-**Step 2 — Skills + direct tool names.** Open that file and add the skill catalog URL plus `"codemode": false` on the server (`opencode mcp add` has no flag for it). The finished config:
+Then `opencode service restart`. The first prompt in a project connects the server; after that `opencode mcp list` shows `rolepod-uiproof connected` (before it, the command reports the service's not-yet-loaded instance as `No MCP servers configured`). Tools surface as `rolepod-uiproof_<tool>`, e.g. `rolepod-uiproof_verify_ui_flow`; skills as `/verify-ui` etc., or the model loads one through its `skill` tool.
+
+What the script writes — paste it by hand if you'd rather not run it:
 
 ```jsonc
 {
+  "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "servers": {
       "rolepod-uiproof": {
@@ -223,12 +232,13 @@ opencode mcp add rolepod-uiproof \
 }
 ```
 
-Start an opencode session in that project, send one prompt, then check `opencode mcp list` — `rolepod-uiproof` should show as connected (the command reports the background service's loaded instance, so before that first session it prints `No MCP servers configured`). Tools surface as `rolepod-uiproof_<tool>`, e.g. `rolepod-uiproof_verify_ui_flow`. The catalog is [`skills/index.json`](skills/index.json) in this repo: opencode fetches every `skills/<name>/SKILL.md` it lists and caches them by `version`, so a new release refreshes the skills without touching your config. Invoke them as `/verify-ui` etc., or let the model load one through its `skill` tool.
-
 **Notes:**
-- Verified on opencode 2.0.12 (v2 config shape: `mcp.servers.<name>`, `environment`, `disabled`). A v1-style entry (`mcp.<name>` with `enabled`) is still normalized by v2.
-- **Why `codemode: false`:** opencode v2 wraps MCP servers in Code Mode by default — the model gets a generic `execute`/`query` pair and none of the 33 tools by name, so the skills' by-name calls (`verify_ui_flow`, `browser_open`, …) never resolve. With Code Mode off the tools are exposed directly, the same as in every other CLI (measured 2026-09-22: with it on, a connected server still listed no `rolepod-uiproof_*` tool).
-- Prefer local files? opencode also discovers `.opencode/skills/`, `.claude/skills/` and `.agents/skills/` in the project (and their `~/` equivalents) — `cp -r skills/* ~/.config/opencode/skills/` works, but stops tracking releases.
+- Needs `node` (the MCP server runs on Node ≥20 anyway) and a plain-JSON config: a file with comments or trailing commas is refused, never rewritten. The previous file is kept as `opencode.json.rolepod-uiproof-bak`.
+- Skills come from [`skills/index.json`](skills/index.json), an opencode HTTP catalog: opencode fetches every `skills/<name>/SKILL.md` it lists and caches them by `version`, so a new release refreshes the skills without touching your config.
+- **Why `codemode: false`:** opencode v2 wraps MCP servers in Code Mode by default — the model gets a generic `execute`/`query` pair and none of the 33 tools by name, so the skills' by-name calls (`verify_ui_flow`, `browser_open`, …) never resolve. With Code Mode off the tools are exposed directly, the same as in every other CLI (measured 2026-09-22 on opencode 2.0.12: with it on, a connected server still listed no `rolepod-uiproof_*` tool).
+- A shell that exports `OPENCODE_CONFIG_DIR` starts opencode with that directory read as well, at higher priority than the global one; the script installs globally and says so, and `ROLEPOD_UIPROOF_OPENCODE_TARGET="$OPENCODE_CONFIG_DIR"` installs there instead.
+- From a checkout of this repo, `scripts/install-opencode.sh --project` points the server at the checkout's own build (`npm run build` first) — inside this repo `npx @rolepod/uiproof@<v>` resolves to the local package and fails, the same trap the root `.mcp.json` avoids.
+- Verified on opencode 2.0.12 (v2 config shape: `mcp.servers.<name>`, `environment`, `disabled`). A v1-style entry (`mcp.<name>` with `enabled`) is still normalized by v2; the script replaces one if present.
 
 ### Direct npm (any MCP-aware tool)
 

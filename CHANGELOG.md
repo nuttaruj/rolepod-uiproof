@@ -7,6 +7,22 @@ release.
 
 ## [Unreleased]
 
+### Added
+
+- **One-line opencode install** — `scripts/install-opencode.sh`
+  (`curl … | bash`; flags `--project` / `--uninstall`;
+  `ROLEPOD_UIPROOF_REF=vX.Y.Z` pins a release) merges the
+  `mcp.servers.rolepod-uiproof` entry (npx pin, audit/fund off,
+  `codemode: false`) and the skill-catalog URL into
+  `~/.config/opencode/opencode.json` (or `./.opencode/opencode.json`),
+  keeps every other key, backs the file up as `*.rolepod-uiproof-bak`,
+  refuses non-plain JSON instead of rewriting it, replaces a stale
+  v1-shaped entry, and takes only its own entries back out on uninstall.
+  From a checkout, `--project` spawns the local build (the in-repo npx
+  trap). README's opencode section shrinks to the one-liner, matching
+  rolepod-seo and rolepod-brain. Test: `opencode_install_script` (bash;
+  skipped on the Windows lane); the script's pin joins `version_lockstep`.
+
 ## [0.21.0] — 2026-09-22
 
 ### Added
