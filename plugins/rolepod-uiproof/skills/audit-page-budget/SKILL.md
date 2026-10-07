@@ -20,7 +20,7 @@ rolepod-uiproof MCP server. No fallback (D-024).
 ## When NOT to use
 
 - Build-time bundle inspection (webpack-bundle-analyzer style) — the
-  parent rolepod's `performance-engineer` agent owns build-output
+  parent rolepod's `rolepod-builder` agent owns build-output
   concerns.
 - Backend p95 / p99 latency — same.
 - Synthetic load tests (k6, Locust) — same.

@@ -18,7 +18,7 @@ MCP server. No fallback (D-024).
 ## When NOT to use
 
 - Backend latency or server-side p95/p99 timing — that is the parent rolepod's
-  `performance-engineer` agent territory.
+  `rolepod-builder` agent territory.
 - Bundle size / build-output inspection — same.
 - Synthetic load tests (k6, Locust) — same.
 - Firefox or WebKit targets — the underlying PerformanceObserver entry

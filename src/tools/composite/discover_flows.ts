@@ -488,7 +488,7 @@ export function deriveFlows(pages: CrawledPage[], startUrl: string): DiscoveredF
 
 // ---------------------------------------------------------------------------
 // Proposed test-case table — TC-ID + P1/P2, the same convention the
-// /scaffold-e2e handoff uses, so parent qa-tester can consume it directly.
+// /scaffold-e2e handoff uses, so parent rolepod-qa can consume it directly.
 // ---------------------------------------------------------------------------
 
 function describeStep(step: VerifyStep): string {

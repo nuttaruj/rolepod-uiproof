@@ -69,7 +69,7 @@ MCP server. No fallback (D-024).
   scaffold round-trip).
 - `test_cases` — proposed table with stable `TC1…` ids, `P1`/`P2`
   priority, human-readable steps, expected result — the same convention
-  the `/scaffold-e2e` handoff uses, so parent `qa-tester` consumes it
+  the `/scaffold-e2e` handoff uses, so parent `rolepod-qa` consumes it
   directly and `check-work` can grep the IDs.
 - `pages` / `page_errors` — crawl inventory.
 - `destructive_count` + per-flow `destructive`/`executed` flags.

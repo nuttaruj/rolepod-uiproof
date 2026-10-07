@@ -676,7 +676,7 @@ export type ExtractUiStateInput = z.infer<typeof extractUiStateSchema>;
 // (HAR-classified), and on-page SEO (DOM + meta inspection). All three
 // are in-browser-observable only — bundle analysis, p95/p99 latency,
 // and build-time concerns are reserved for the parent rolepod's
-// performance-engineer agent (see brief/handoff-uiproof-v0.7.md).
+// rolepod-builder agent (see brief/handoff-uiproof-v0.7.md).
 // ---------------------------------------------------------------------------
 
 export const cwvInteractionStepSchema = z.discriminatedUnion("kind", [

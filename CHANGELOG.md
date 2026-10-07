@@ -7,6 +7,14 @@ release.
 
 ## [Unreleased]
 
+## [0.22.1] — 2026-10-08
+
+### Changed
+
+- **Parent agent names** — skills and comments name the parent rolepod's
+  4 agent types (rolepod v2.221.0): `performance-engineer` → `rolepod-builder`,
+  `qa-tester` → `rolepod-qa`. No behavior change.
+
 ## [0.22.0] — 2026-09-22
 
 ### Added
