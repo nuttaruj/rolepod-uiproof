@@ -6,11 +6,11 @@ import { ArtifactStore } from "../../src/artifact/ArtifactStore.js";
 import { PlaywrightEngine } from "../../src/engine/PlaywrightEngine.js";
 import { SessionRegistry } from "../../src/session/SessionRegistry.js";
 import { verifyUiFlowTool } from "../../src/tools/composite/verify_ui_flow.js";
-import { exampleComReachable } from "./_net.js";
-const ONLINE = await exampleComReachable();
+import { startExampleFixture } from "./_fixture.js";
 import type { ToolContext } from "../../src/tools/types.js";
 
-const EXAMPLE_URL = "https://example.com";
+const fixture = await startExampleFixture();
+const EXAMPLE_URL = fixture.url;
 
 let tmpRoot: string;
 let registry: SessionRegistry;
@@ -29,10 +29,11 @@ beforeAll(() => {
 
 afterAll(async () => {
   await registry.shutdown();
+  await fixture.close();
   rmSync(tmpRoot, { recursive: true, force: true });
 });
 
-describe.skipIf(!ONLINE)("PlaywrightEngine — direct", () => {
+describe("PlaywrightEngine — direct", () => {
   let leftoverSession: { id: string; platform: "web" } | null = null;
 
   afterEach(async () => {
@@ -42,13 +43,13 @@ describe.skipIf(!ONLINE)("PlaywrightEngine — direct", () => {
     }
   });
 
-  it("opens example.com, snapshots, screenshots, closes", async () => {
+  it("opens the example page, snapshots, screenshots, closes", async () => {
     const session = await registry.open({ platform: "web", url: EXAMPLE_URL, headless: true });
     leftoverSession = { id: session.id, platform: "web" };
 
     const engine = registry.engineFor(session.id);
     const snap = await engine.snapshot({ id: session.id, platform: "web" });
-    expect(snap.url_or_screen).toMatch(/example\.com/);
+    expect(snap.url_or_screen).toMatch(/127\.0\.0\.1/);
     expect(snap.tree.role).toBeTruthy();
 
     const flat = flattenNames(snap.tree);
@@ -82,7 +83,7 @@ describe.skipIf(!ONLINE)("PlaywrightEngine — direct", () => {
   });
 });
 
-describe.skipIf(!ONLINE)("verify_ui_flow — composite", () => {
+describe("verify_ui_flow — composite", () => {
   it("passes when expected text is on the page", async () => {
     const handler = verifyUiFlowTool.build(ctx);
     const result = await handler({

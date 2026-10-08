@@ -2,11 +2,11 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { exampleComReachable } from "./_net.js";
-const ONLINE = await exampleComReachable();
+import { startExampleFixture } from "./_fixture.js";
 import { runReplay } from "../../src/cli/replay.js";
 
-const EXAMPLE_URL = "https://example.com";
+const fixture = await startExampleFixture();
+const EXAMPLE_URL = fixture.url;
 let tmpRoot: string;
 let bundlePath: string;
 
@@ -26,11 +26,12 @@ beforeAll(() => {
   );
 });
 
-afterAll(() => {
+afterAll(async () => {
+  await fixture.close();
   rmSync(tmpRoot, { recursive: true, force: true });
 });
 
-describe.skipIf(!ONLINE)("rolepod-uiproof replay", () => {
+describe("rolepod-uiproof replay", () => {
   it("exits 0 on a passing replay bundle", async () => {
     const chunks: string[] = [];
     const orig = process.stdout.write.bind(process.stdout);
