@@ -21,6 +21,10 @@ import { ArtifactStore } from "../../src/artifact/ArtifactStore.js";
  * actual `.rolepod/` directory).
  */
 
+// git reports forward slashes on Windows (C:/Users/...); path.resolve gives
+// backslashes. Compare both sides in one shape.
+const norm = (p: string): string => resolve(p);
+
 let tmp: string;
 let originalCwd: string;
 
@@ -28,7 +32,9 @@ beforeEach(() => {
   originalCwd = process.cwd();
   // Resolve symlinks (macOS /var → /private/var) so the value matches what
   // `process.cwd()` returns after `chdir` and what `git rev-parse` reports.
-  tmp = realpathSync(mkdtempSync(join(tmpdir(), "rolepod-uiproof-v061-")));
+  // `.native` also expands Windows 8.3 short names (RUNNER~1 → runneradmin),
+  // which is the form `git rev-parse --show-toplevel` reports.
+  tmp = realpathSync.native(mkdtempSync(join(tmpdir(), "rolepod-uiproof-v061-")));
   // git init so `git rev-parse --show-toplevel` resolves to tmp itself.
   execSync("git init -q", { cwd: tmp });
   process.chdir(tmp);
@@ -48,7 +54,7 @@ describe("detectRolepodParent", () => {
     const result = detectRolepodParent();
     expect(result.active).toBe(false);
     expect(result.protocol).toBeNull();
-    expect(result.gitRoot).toBe(tmp);
+    expect(norm(result.gitRoot)).toBe(tmp);
   });
 
   it("returns active=true with protocol when marker exists", () => {
@@ -58,7 +64,7 @@ describe("detectRolepodParent", () => {
     const result = detectRolepodParent();
     expect(result.active).toBe(true);
     expect(result.protocol).toBe("v1");
-    expect(result.gitRoot).toBe(tmp);
+    expect(norm(result.gitRoot)).toBe(tmp);
   });
 
   it("reads first trimmed line when marker has multiple lines", () => {
@@ -97,7 +103,7 @@ describe("detectRolepodParent", () => {
 
     const result = detectRolepodParent(sub);
     expect(result.active).toBe(true);
-    expect(result.gitRoot).toBe(tmp); // not `sub`
+    expect(norm(result.gitRoot)).toBe(tmp); // not `sub`
   });
 
   it("falls back to cwd when not in a git work tree", () => {
