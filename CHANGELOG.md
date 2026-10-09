@@ -7,6 +7,18 @@ release.
 
 ## [Unreleased]
 
+## [0.22.2] — 2026-10-09
+
+### Changed
+
+- **BREAKING (one arg): `extract_computed_style.properties` → `css_properties`**
+  — a parameter literally named `properties` is a JSON-Schema keyword and
+  Gemini's function-declaration converter rejected the whole tool list
+  (`[400] INVALID_ARGUMENT ... Schema, "object"`, e.g. opencode on a Gemini
+  backend). No alias: the server validates input with a strict object, so a
+  caller still sending `properties` now gets an unknown-key error. New
+  regression test fails if any tool parameter is named after a keyword.
+
 ## [0.22.1] — 2026-10-08
 
 ### Changed

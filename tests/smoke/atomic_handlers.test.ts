@@ -112,7 +112,7 @@ describe("atomic tool handlers — offline fixture", () => {
     const evalRes = body(await browserEvaluateTool.build(ctx)({ session_id: sessionId, script: "return 1 + 1;" } as never));
     expect(JSON.stringify(evalRes)).toMatch(/2/);
 
-    const styleRes = body(await extractComputedStyleTool.build(ctx)({ session_id: sessionId, selector: "#box", properties: ["color"] } as never));
+    const styleRes = body(await extractComputedStyleTool.build(ctx)({ session_id: sessionId, selector: "#box", css_properties: ["color"] } as never));
     expect(JSON.stringify(styleRes)).toMatch(/rgb\(10, 20, 30\)/);
 
     body(await browserSetEnvTool.build(ctx)({ session_id: sessionId, viewport: { width: 800, height: 600 } } as never));

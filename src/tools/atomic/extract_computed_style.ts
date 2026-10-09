@@ -11,7 +11,7 @@ import type { ToolModule } from "../types.js";
 /**
  * Curated computed-style properties most useful for replicating a design:
  * typography, color, background/gradient, effects, border, spacing, layout.
- * Override per-call via the `properties` argument.
+ * Override per-call via the `css_properties` argument.
  */
 export const DEFAULT_COMPUTED_STYLE_PROPS = [
   "color",
@@ -62,7 +62,7 @@ export const DEFAULT_COMPUTED_STYLE_PROPS = [
 export const extractComputedStyleTool: ToolModule<typeof extractComputedStyleShape> = {
   name: ToolNames.extractComputedStyle,
   description:
-    "Read the computed CSS of the first element matching a CSS selector — typography, color, background/gradient, spacing, border, shadow, layout, transform — plus its bounding box. Read-only (no eval gate); lets you replicate a reference design exactly instead of guessing tokens. Pass `properties` to override the curated default set.",
+    "Read the computed CSS of the first element matching a CSS selector — typography, color, background/gradient, spacing, border, shadow, layout, transform — plus its bounding box. Read-only (no eval gate); lets you replicate a reference design exactly instead of guessing tokens. Pass `css_properties` to override the curated default set.",
   inputShape: extractComputedStyleShape,
   build(ctx) {
     return safeHandler(async (args: ExtractComputedStyleInput) => {
@@ -73,7 +73,7 @@ export const extractComputedStyleTool: ToolModule<typeof extractComputedStyleSha
           "extract_computed_style is web-only and requires PlaywrightEngine.",
         );
       }
-      const props = args.properties ?? [...DEFAULT_COMPUTED_STYLE_PROPS];
+      const props = args.css_properties ?? [...DEFAULT_COMPUTED_STYLE_PROPS];
       const result = await engine.computedStyle(
         {
           id: args.session_id,

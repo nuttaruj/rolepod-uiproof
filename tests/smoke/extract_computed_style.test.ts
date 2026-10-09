@@ -77,12 +77,12 @@ describe("extract_computed_style", () => {
     expect(body.box.height).toBeCloseTo(80, 0);
   });
 
-  it("honours an explicit `properties` subset", async () => {
+  it("honours an explicit `css_properties` subset", async () => {
     const handler = extractComputedStyleTool.build(ctx);
     const result = await handler({
       session_id: sessionId,
       selector: "#target",
-      properties: ["color", "font-size"],
+      css_properties: ["color", "font-size"],
     });
     const body = result.structuredContent as { styles: Record<string, string> };
     expect(Object.keys(body.styles).sort()).toEqual(["color", "font-size"]);

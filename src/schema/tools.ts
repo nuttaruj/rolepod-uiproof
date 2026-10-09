@@ -377,12 +377,14 @@ export type BrowserEvaluateInput = z.infer<typeof browserEvaluateSchema>;
 
 /**
  * Read computed CSS for the first element matching `selector`. Read-only —
- * no eval gate. `properties` overrides the curated default set when given.
+ * no eval gate. `css_properties` overrides the curated default set when given.
  */
 export const extractComputedStyleShape = {
   session_id: z.string().min(1),
   selector: z.string().min(1),
-  properties: z.array(z.string().min(1)).optional(),
+  // Not `properties`: a param named after a JSON-Schema keyword makes
+  // Gemini reject the whole tool list.
+  css_properties: z.array(z.string().min(1)).optional(),
 } as const;
 export const extractComputedStyleSchema = z.object(extractComputedStyleShape);
 export type ExtractComputedStyleInput = z.infer<typeof extractComputedStyleSchema>;
