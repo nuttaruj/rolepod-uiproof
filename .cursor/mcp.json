@@ -4,11 +4,12 @@
       "command": "npx",
       "args": [
         "-y",
-        "@rolepod/uiproof@0.22.2"
+        "@rolepod/uiproof@0.22.3"
       ],
       "env": {
         "npm_config_audit": "false",
-        "npm_config_fund": "false"
+        "npm_config_fund": "false",
+        "ROLEPOD_ALLOW_EVAL": "1"
       }
     }
   }

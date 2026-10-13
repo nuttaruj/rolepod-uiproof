@@ -44,15 +44,17 @@ Every skill is **single-backend** (D-024) — it calls the rolepod-uiproof serve
 
 **Combined with rolepod parent**: when the parent's SessionStart hook drops the marker file `<git-root>/.rolepod/parent-active` (single line of content = the protocol version, e.g. `v1`), uiproof writes evidence to `<git-root>/.rolepod/evidence/<ts>-rolepod-uiproof-<skill>/` instead, where parent's `check-work` skill auto-aggregates manifests into the verify report. The marker is re-detected per run, so a marker the parent writes after this server has already started is still honoured; no env-var, no daemon. To force combined mode without a parent session: `mkdir -p .rolepod && echo v1 > .rolepod/parent-active`. No skill changes — same 33 tools, same 9 skills, smarter routing.
 
-**Offline / registry-blocked machines**: the spawn configs fetch `@rolepod/uiproof` via `npx`, which needs npm-registry access. On an air-gapped or registry-blocked host, install once with `npm i -g @rolepod/uiproof@0.22.2` and set the MCP `command` to the global `rolepod-uiproof` binary (drop the `npx` / `-y` args) so no fetch is required at spawn time.
+**Offline / registry-blocked machines**: the spawn configs fetch `@rolepod/uiproof` via `npx`, which needs npm-registry access. On an air-gapped or registry-blocked host, install once with `npm i -g @rolepod/uiproof@0.22.3` and set the MCP `command` to the global `rolepod-uiproof` binary (drop the `npx` / `-y` args) so no fetch is required at spawn time.
 
 **First launch after install or update: the `npm audit` trap.** Every new version is a fresh `npx` cache entry, and a cold `npx` install runs `npm audit` against the registry's bulk-advisory endpoint — measured at 190-320 s on 2026-09-04, while the actual download + extract of the tree takes 6-9 s. That blows every MCP client's startup timeout; Claude Code reports `Failed to connect — CONNECTION_CLOSED` and caches the failure for ~15 minutes, so the *next* session fails too even though the install finished in the background. Since 0.20.0 every shipped spawn config sets `npm_config_audit=false` and `npm_config_fund=false` in the server's `env`, which brings the cold start down to seconds (the flags cannot be passed in the `npx` args — npx treats leading flags as its own usage error). If you hand-write a spawn config, copy that `env` block from the snippets below. To pre-warm anyway, before opening an agent session:
 
 ```bash
-npm_config_audit=false npx -y @rolepod/uiproof@0.22.2 --help
+npm_config_audit=false npx -y @rolepod/uiproof@0.22.3 --help
 ```
 
 or use the global-binary spawn config above, which never fetches at launch. Running the server from inside a checkout of *this* repo is a separate trap: `npx` sees the local `package.json` with the same name and version, skips the registry, and fails with `rolepod-uiproof: command not found` — use the repo's own `.mcp.json` (`node dist/bin/rolepod-uiproof.js`) there instead.
+
+**`browser_evaluate` is enabled by the shipped configs (security-relevant default).** Every spawn config this repo ships sets `ROLEPOD_ALLOW_EVAL=1` in the server's `env`, so `browser_evaluate` and `verify_ui_flow`'s `evaluate` step work out of the box. That runs arbitrary JavaScript in the page the session is on: it can read and change the DOM, read non-HttpOnly cookies and `localStorage`/`sessionStorage`, and make same-origin `fetch` calls with the page's credentials. Only point a session at pages you trust it to act on. The gate in the server is unchanged (it requires the exact value `1`), so to turn it off remove `ROLEPOD_ALLOW_EVAL` from the `env` block of your spawn config or set `ROLEPOD_ALLOW_EVAL=0`, then restart the server; both tools then return an "eval disabled" error. A hand-written config with no `ROLEPOD_ALLOW_EVAL` also has it off.
 
 **Artifacts from authenticated sessions are sensitive.** uiproof redacts `Cookie`, `Set-Cookie` and `Authorization` headers (and the structured cookie lists) from both `network.har` and `trace.zip` when the session closes, so neither file carries the session any more. Bodies are not redacted: the HAR embeds response bodies and the trace carries DOM snapshots and screenshots, so whatever an authenticated page rendered is still in there. Tool results that surface these paths carry a `credentials_note` / `har_note` reminder. Share them only with people cleared to see those pages. **Authenticated runs without re-logging in:** log in (or open a one-time link) once, call `browser_save_state` to write a Playwright storageState JSON, then pass that path as `storage_state` to later `browser_open` calls — reusable across runs and after `browser_close`. That state file IS the session; keep it out of issues, PRs, and shared drives, and delete it when done.
 
@@ -179,12 +181,14 @@ Open Antigravity Settings → Customizations → **Open MCP Config** (or edit `~
   "mcpServers": {
     "rolepod-uiproof": {
       "command": "npx",
-      "args": ["-y", "@rolepod/uiproof@0.22.2"],
-      "env": { "npm_config_audit": "false", "npm_config_fund": "false" }
+      "args": ["-y", "@rolepod/uiproof@0.22.3"],
+      "env": { "npm_config_audit": "false", "npm_config_fund": "false", "ROLEPOD_ALLOW_EVAL": "1" }
     }
   }
 }
 ```
+
+The `ROLEPOD_ALLOW_EVAL` env enables `browser_evaluate` (see "`browser_evaluate` is enabled by the shipped configs" near the top).
 
 Restart Antigravity. Verify the MCP server is connected via Settings → Customizations → MCP Servers panel.
 
@@ -222,8 +226,8 @@ What the script writes — paste it by hand if you'd rather not run it:
     "servers": {
       "rolepod-uiproof": {
         "type": "local",
-        "command": ["npx", "-y", "@rolepod/uiproof@0.22.2"],
-        "environment": { "npm_config_audit": "false", "npm_config_fund": "false" },
+        "command": ["npx", "-y", "@rolepod/uiproof@0.22.3"],
+        "environment": { "npm_config_audit": "false", "npm_config_fund": "false", "ROLEPOD_ALLOW_EVAL": "1" },
         "codemode": false
       }
     }
@@ -231,6 +235,8 @@ What the script writes — paste it by hand if you'd rather not run it:
   "skills": ["https://raw.githubusercontent.com/nuttaruj/rolepod-uiproof/main/skills/"]
 }
 ```
+
+The `ROLEPOD_ALLOW_EVAL` env enables `browser_evaluate` (see "`browser_evaluate` is enabled by the shipped configs" near the top). Re-running the installer keeps an existing `ROLEPOD_ALLOW_EVAL` value (e.g. your `"0"`) and any custom `environment` keys.
 
 **Notes:**
 - Needs `node` (the MCP server runs on Node ≥20 anyway) and a plain-JSON config: a file with comments or trailing commas is refused, never rewritten. The previous file is kept as `opencode.json.rolepod-uiproof-bak`.
@@ -249,12 +255,14 @@ Use this when your tool reads a standard `mcpServers` config (most non-CLI MCP c
   "mcpServers": {
     "rolepod-uiproof": {
       "command": "npx",
-      "args": ["-y", "@rolepod/uiproof@0.22.2"],
-      "env": { "npm_config_audit": "false", "npm_config_fund": "false" }
+      "args": ["-y", "@rolepod/uiproof@0.22.3"],
+      "env": { "npm_config_audit": "false", "npm_config_fund": "false", "ROLEPOD_ALLOW_EVAL": "1" }
     }
   }
 }
 ```
+
+The `ROLEPOD_ALLOW_EVAL` env enables `browser_evaluate` (see "`browser_evaluate` is enabled by the shipped configs" near the top).
 
 33 MCP tools (23 `browser_*` atomics + `extract_computed_style` + 9 composites including `verify_ui_flow`, `audit_a11y`, `visual_diff`, `scaffold_e2e`, `extract_ui_state`, `measure_cwv`, `audit_page_budget`, `audit_seo`, `discover_flows`) will appear in your client. Skills are not surfaced via this path — call the tools by name.
 

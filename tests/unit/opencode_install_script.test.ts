@@ -51,7 +51,7 @@ const readCfg = (file: string) => JSON.parse(readFileSync(file, "utf8")) as Cfg;
 const expectedServer = (spec = `@rolepod/uiproof@${version}`) => ({
   type: "local",
   command: ["npx", "-y", spec],
-  environment: { npm_config_audit: "false", npm_config_fund: "false" },
+  environment: { npm_config_audit: "false", npm_config_fund: "false", ROLEPOD_ALLOW_EVAL: "1" },
   codemode: false,
 });
 const globalFile = () => join(tmp, ".config", "opencode", "opencode.json");
@@ -114,6 +114,39 @@ describe.skipIf(process.platform === "win32")("scripts/install-opencode.sh", () 
 
     expect(run([], { target }).status).toBe(0);
     expect(readFileSync(file, "utf8")).toBe(once);
+  });
+
+  it("re-run keeps an explicit ROLEPOD_ALLOW_EVAL opt-out and custom env, still bumps the pin", () => {
+    const target = join(tmp, "optout");
+    mkdirSync(target);
+    const file = join(target, "opencode.json");
+    writeFileSync(
+      file,
+      JSON.stringify({
+        mcp: {
+          servers: {
+            "rolepod-uiproof": {
+              type: "local",
+              command: ["npx", "-y", "@rolepod/uiproof@0.0.1"],
+              environment: { ROLEPOD_ALLOW_EVAL: "0", CUSTOM_X: "y" },
+            },
+          },
+        },
+      }),
+    );
+    const r = run([], { target });
+    expect(r.status, r.stderr).toBe(0);
+    const entry = readCfg(file).mcp?.servers?.["rolepod-uiproof"];
+    expect(entry?.command).toEqual(["npx", "-y", `@rolepod/uiproof@${version}`]);
+    expect(entry?.environment).toEqual({
+      npm_config_audit: "false",
+      npm_config_fund: "false",
+      ROLEPOD_ALLOW_EVAL: "0",
+      CUSTOM_X: "y",
+    });
+    expect(r.stdout).toContain("browser_evaluate is OFF");
+    const fresh = run([], { target: join(tmp, "fresh") });
+    expect(fresh.stdout).toContain("browser_evaluate is ON");
   });
 
   it("treats an empty or BOM-prefixed file as a fresh config", () => {

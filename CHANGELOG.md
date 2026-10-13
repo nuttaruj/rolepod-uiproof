@@ -7,6 +7,20 @@ release.
 
 ## [Unreleased]
 
+## [0.22.3] — 2026-10-13
+
+### Security
+- **Default change: shipped spawn configs now set `ROLEPOD_ALLOW_EVAL=1`**
+  (`.claude-plugin/plugin.json`, `plugins/rolepod-uiproof/` plugin.json and
+  `.mcp.json`, `.cursor/mcp.json`, `gemini-extension.json`, the repo's dev
+  `.mcp.json`, `scripts/install-opencode.sh`, README snippets), so
+  `browser_evaluate` and `verify_ui_flow`'s `evaluate` step work out of the
+  box. This allows arbitrary JS in the page (DOM, non-HttpOnly cookies,
+  localStorage, same-origin fetch). The code gate is unchanged
+  (`ROLEPOD_ALLOW_EVAL === "1"`, still marked destructive): remove the env or
+  set `ROLEPOD_ALLOW_EVAL=0` to turn it off. Tests assert the env in every
+  shipped config.
+
 ## [0.22.2] — 2026-10-09
 
 ### Changed

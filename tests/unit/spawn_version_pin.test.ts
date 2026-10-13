@@ -57,4 +57,23 @@ describe("spawn config version pin (distribution lockstep)", () => {
     expect(env.npm_config_audit).toBe("false");
     expect(env.npm_config_fund).toBe("false");
   });
+
+  // Security-relevant default (R4): shipped configs enable browser_evaluate
+  // and verify_ui_flow's `evaluate` step. The code gate stays opt-in
+  // (`ROLEPOD_ALLOW_EVAL === "1"`), so self-hosters can remove the env or set 0.
+  it.each([...SPAWN_CONFIGS, ".mcp.json"])("%s sets ROLEPOD_ALLOW_EVAL=1", (rel) => {
+    const json = JSON.parse(readFileSync(resolve(repoRoot, rel), "utf8")) as {
+      mcpServers: Record<string, { env?: Record<string, string> }>;
+    };
+    expect(json.mcpServers["rolepod-uiproof"]?.env?.ROLEPOD_ALLOW_EVAL).toBe("1");
+  });
+
+  it("every README config block that spawns @rolepod/uiproof@ carries ROLEPOD_ALLOW_EVAL", () => {
+    const readme = readFileSync(resolve(repoRoot, "README.md"), "utf8");
+    const blocks = [...readme.matchAll(/```(?:json|jsonc)\n([\s\S]*?)```/g)]
+      .map((m) => m[1] as string)
+      .filter((b) => b.includes("@rolepod/uiproof@"));
+    expect(blocks.length).toBeGreaterThanOrEqual(3);
+    for (const b of blocks) expect(b).toContain("ROLEPOD_ALLOW_EVAL");
+  });
 });

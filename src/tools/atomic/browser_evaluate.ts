@@ -10,16 +10,17 @@ import type { ToolModule } from "../types.js";
 
 /**
  * Gating: this tool executes ARBITRARY JavaScript in the page context,
- * which can read DOM state, mutate it, or exfiltrate data. It is disabled
- * by default and only registers a working handler when the server was
- * started with the env var `ROLEPOD_ALLOW_EVAL=1`. Otherwise the tool is
- * still listed (so callers can discover the capability) but every call
- * returns an `eval_disabled` error.
+ * which can read DOM state, mutate it, or exfiltrate data. The code default
+ * is off, and the shipped spawn configs set the env to enable it.
+ * The handler only works when the server was started with the env var
+ * `ROLEPOD_ALLOW_EVAL=1`. Otherwise the tool is still listed (so callers
+ * can discover the capability) but every call returns an `eval_disabled`
+ * error.
  */
 export const browserEvaluateTool: ToolModule<typeof browserEvaluateShape> = {
   name: ToolNames.browserEvaluate,
   description:
-    "Execute JavaScript in the active page's context. The `script` is the body of an async function — use `return` for the result and reference inputs via the implicit `args` array. DISABLED unless the MCP server was launched with `ROLEPOD_ALLOW_EVAL=1`; intended for trusted automation setups only (state seeding, computed-style reads, synthetic event dispatch).",
+    "Execute JavaScript in the active page's context. The `script` is the body of an async function — use `return` for the result and reference inputs via the implicit `args` array. Requires the MCP server to run with `ROLEPOD_ALLOW_EVAL=1` (set in the shipped spawn configs; remove it or set 0 to disable); intended for trusted automation setups only (state seeding, computed-style reads, synthetic event dispatch).",
   inputShape: browserEvaluateShape,
   build(ctx) {
     const allowed = process.env.ROLEPOD_ALLOW_EVAL === "1";

@@ -23,7 +23,7 @@ set -euo pipefail
 REPO="nuttaruj/rolepod-uiproof"
 RAW="https://raw.githubusercontent.com/$REPO/main/scripts/install-opencode.sh"
 # Pinned like every other spawn config; tests/unit/version_lockstep.test.ts keeps it on package.json.
-PACKAGE_SPEC="@rolepod/uiproof@0.22.2"
+PACKAGE_SPEC="@rolepod/uiproof@0.22.3"
 SERVER="rolepod-uiproof"
 
 SCOPE=global
@@ -146,19 +146,26 @@ if (!raw.trim()) cfg = { $schema: "https://opencode.ai/config.json", ...cfg };
 cfg.mcp = cfg.mcp ?? {};
 if (server in cfg.mcp) delete cfg.mcp[server]; // stale v1-shaped entry
 cfg.mcp.servers = cfg.mcp.servers ?? {};
+const prevEnv = isObj(cfg.mcp.servers[server]?.environment) ? cfg.mcp.servers[server].environment : {};
 cfg.mcp.servers[server] = {
   type: "local",
   command: launch === "node" ? ["node", launchArg] : ["npx", "-y", launchArg],
   // Cold `npx` runs `npm audit` against the registry (190-320 s measured) —
   // past opencode's 30 s startup timeout. Off, the cold start is seconds.
-  environment: { npm_config_audit: "false", npm_config_fund: "false" },
+  // Existing keys win, so a user's explicit ROLEPOD_ALLOW_EVAL (e.g. "0") and
+  // custom variables survive a re-run; the pin and the rest still come from here.
+  environment: { npm_config_audit: "false", npm_config_fund: "false", ROLEPOD_ALLOW_EVAL: "1", ...prevEnv },
   // opencode's default Code Mode hides MCP tools behind execute/query; the
   // skills call them by name, so expose them directly.
   codemode: false,
 };
+const evalOn = cfg.mcp.servers[server].environment.ROLEPOD_ALLOW_EVAL === "1";
 cfg.skills = [...(cfg.skills ?? []).filter((u) => !ours(u)), catalog];
 write();
 console.log(`  ✓ ${server} (${launchArg}) → ${file}`);
+console.log(evalOn
+  ? `    browser_evaluate is ON (ROLEPOD_ALLOW_EVAL=1: arbitrary JS in the page); to turn it off set ROLEPOD_ALLOW_EVAL to "0" in that environment`
+  : `    browser_evaluate is OFF (ROLEPOD_ALLOW_EVAL=${cfg.mcp.servers[server].environment.ROLEPOD_ALLOW_EVAL}); set it to "1" in that environment to enable`);
 console.log(`    mcp.servers.${server} + skills catalog ${catalog}${exists ? `; previous file kept as ${file}.rolepod-uiproof-bak` : ""}`);
 JS
 [ -z "$DEV_NOTE" ] || echo "$DEV_NOTE"

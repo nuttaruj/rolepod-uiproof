@@ -3,7 +3,9 @@
     "rolepod-uiproof": {
       "command": "node",
       "args": ["dist/bin/rolepod-uiproof.js"],
-      "env": {}
+      "env": {
+        "ROLEPOD_ALLOW_EVAL": "1"
+      }
     }
   }
 }
