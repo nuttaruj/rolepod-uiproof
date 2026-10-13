@@ -69,7 +69,8 @@ describe("spawn config version pin (distribution lockstep)", () => {
   });
 
   it("every README config block that spawns @rolepod/uiproof@ carries ROLEPOD_ALLOW_EVAL", () => {
-    const readme = readFileSync(resolve(repoRoot, "README.md"), "utf8");
+    // A Windows checkout may have CRLF endings; the fence regex wants "\n".
+    const readme = readFileSync(resolve(repoRoot, "README.md"), "utf8").replace(/\r\n/g, "\n");
     const blocks = [...readme.matchAll(/```(?:json|jsonc)\n([\s\S]*?)```/g)]
       .map((m) => m[1] as string)
       .filter((b) => b.includes("@rolepod/uiproof@"));
